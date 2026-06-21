@@ -1,12 +1,9 @@
 import { supabase } from './supabase';
 
-export type UserRoleType = 'aspirante' | 'deportista' | 'admin' | 'tribunal' | 'profesor' | 'juez' | 'arbitro' | 'medico' | null;
+export type UserRoleType = 'aspirante' | 'deportista' | 'admin' | 'tribunal' | 'director' | 'juez' | 'arbitro' | 'medico' | null;
 
 export async function signInWithPassword(email: string, password: string) {
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) {
     console.error('Error al iniciar sesión:', error.message);
     throw error;
@@ -15,8 +12,6 @@ export async function signInWithPassword(email: string, password: string) {
 }
 
 export async function sendMagicLinkForFirstTime(email: string) {
-  // Usaremos OTP Magic Link con shouldCreateUser: true
-  // Esto crea el usuario si no existe, o simplemente envía un Magic Link si ya existe.
   const { error } = await supabase.auth.signInWithOtp({
     email,
     options: {
@@ -31,9 +26,7 @@ export async function sendMagicLinkForFirstTime(email: string) {
 }
 
 export async function updatePassword(newPassword: string) {
-  const { data, error } = await supabase.auth.updateUser({
-    password: newPassword
-  });
+  const { data, error } = await supabase.auth.updateUser({ password: newPassword });
   if (error) {
     console.error('Error actualizando contraseña:', error.message);
     throw error;
@@ -50,51 +43,24 @@ export async function signOut() {
 }
 
 export async function getUserRoleAndProfile(email: string): Promise<{ role: UserRoleType; profileId?: string }> {
-  // Check if admin
-  if (email === 'admin@fmk.com' || email === 'admin@fmk.es' || email.startsWith('elvialeonsh')) {
-    return { role: 'admin' };
-  }
+  const emailLower = email.toLowerCase().trim();
 
-  // Check if Médico Federativo
-  if (email === 'paginasusar@gmail.com') {
-    return { role: 'medico' };
-  }
-
-  // Check if Judge/Tribunal/Arbitro
-  const { data: judgeData } = await supabase
-    .from('judges')
-    .select('*')
-    .ilike('email', email)
+  // Consultar la tabla user_roles en Supabase
+  const { data, error } = await supabase
+    .from('user_roles')
+    .select('role, profile_id')
+    .ilike('email', emailLower)
     .single();
 
-  if (judgeData) {
-    if (judgeData.rank?.toLowerCase().includes('juez')) {
-      return { role: 'juez', profileId: judgeData.id };
-    }
-    if (judgeData.rank?.toLowerCase().includes('arbitro') || judgeData.rank?.toLowerCase().includes('árbitro')) {
-      return { role: 'arbitro', profileId: judgeData.id };
-    }
-    if (judgeData.rank?.toLowerCase().includes('tribunal') || judgeData.rank?.toLowerCase().includes('director')) {
-      return { role: 'tribunal', profileId: judgeData.id };
-    }
-    return { role: 'juez', profileId: judgeData.id };
+  if (!error && data) {
+    console.log(`[auth] Rol encontrado para ${emailLower}:`, data.role);
+    return {
+      role: data.role as UserRoleType,
+      profileId: data.profile_id || undefined
+    };
   }
 
-  // Check if Aspirante/Deportista
-  const { data: aspData } = await supabase
-    .from('aspirantes')
-    .select('*')
-    .ilike('email', email)
-    .single();
-
-  if (aspData) {
-    if (aspData.status === 'Borrador' || aspData.status === 'Pendiente') {
-      return { role: 'deportista', profileId: aspData.id };
-    } else {
-      return { role: 'aspirante', profileId: aspData.id };
-    }
-  }
-
-  // Default
-  return { role: 'deportista' }; 
+  // Si no está en user_roles, asignar rol por defecto
+  console.warn(`[auth] No se encontró rol para ${emailLower}. Rol por defecto: deportista`);
+  return { role: 'deportista' };
 }
