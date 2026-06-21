@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Aspirante, Judge, Tribunal, Evaluacion, ParteBloqueComun, VotoJuez, ViaExamen } from '../types';
 import { GRADOS_CONFIG } from '../data';
 import { useUI } from '../contexts/UIContext';
+import ConfiguracionPerfilFederativo from './ConfiguracionPerfilFederativo';
 
 interface JudgePortalProps {
   activeJudgeId: string;
@@ -307,7 +308,14 @@ export default function JudgePortal({
           )}
         </div>
         {/* Footer Actions */}
-        <div className="mt-auto px-8 pt-8 border-t border-stone-100 dark:border-white/10 relative z-10 bg-white dark:bg-[#151515] space-y-2">
+        <div className="mt-auto px-8 pt-6 border-t border-stone-100 dark:border-white/10 relative z-10 bg-white dark:bg-[#151515] flex flex-col gap-3 pb-8">
+          <button 
+            onClick={() => setSelectedAspId('PERFIL')} 
+            className={`w-full flex items-center justify-center gap-3 px-5 py-3.5 rounded-xl border transition-all text-sm font-bold cursor-pointer ${selectedAspId === 'PERFIL' ? 'border-red-400 bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400' : 'border-stone-200 dark:border-white/20 text-stone-700 dark:text-stone-300 hover:text-red-600 hover:border-red-200 hover:bg-red-50'}`}
+          >
+            <span className="material-symbols-outlined text-[20px]">person</span>
+            Mi Perfil
+          </button>
           <button onClick={onLogout} className="w-full flex items-center justify-center gap-3 px-5 py-3.5 rounded-xl border border-stone-200 dark:border-white/20 text-stone-500 dark:text-stone-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-all text-sm font-bold cursor-pointer">
             <span className="material-symbols-outlined text-[20px]">logout</span>
             Cerrar Sesión
@@ -317,7 +325,21 @@ export default function JudgePortal({
 
       {/* ── Main Content Area ── */}
       <main className="flex-1 xl:ml-80 flex flex-col h-screen overflow-y-auto bg-stone-100 dark:bg-[#0a0a0a]">
-        {!selectedAsp || !evSelected ? (
+        {selectedAspId === 'PERFIL' ? (
+          <div className="p-6 lg:p-12 animate-in fade-in slide-in-from-right-8 duration-300 w-full flex flex-col items-start">
+            <ConfiguracionPerfilFederativo 
+              roleName="Juez Evaluador" 
+              defaultName={activeJudge.name} 
+              defaultEmail="No registrado"
+              onUpdateName={(newName) => {
+                if (onUpdateAspiranteAtomic) {
+                  // If we wanted to persist judge name we would call an api function here
+                  // For now, it is handled via local updates or mocked
+                }
+              }}
+            />
+          </div>
+        ) : !selectedAsp || !evSelected ? (
           <div className="flex-1 flex flex-col items-center justify-center p-12 text-center opacity-50">
              <span className="material-symbols-outlined text-8xl mb-6 text-stone-300">fact_check</span>
              <h2 className="font-black text-4xl mb-4">Panel de Calificación</h2>

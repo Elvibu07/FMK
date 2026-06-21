@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Aspirante, Documento } from '../types';
 import { useUI } from '../contexts/UIContext';
+import ConfiguracionPerfilFederativo from './ConfiguracionPerfilFederativo';
 
 interface ProfesorPortalProps {
   clubName: string;
@@ -12,7 +13,7 @@ interface ProfesorPortalProps {
 
 export default function ProfesorPortal({ clubName, aspirantes, onUpdateAspirantes, onUpdateAspiranteAtomic, onLogout }: ProfesorPortalProps) {
   const { showToast, showConfirm, showAlert } = useUI();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'alumnos' | 'pagos' | 'estadisticas'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'alumnos' | 'pagos' | 'estadisticas' | 'perfil'>('dashboard');
 
   const toggleDarkMode = () => {
     const isDark = document.documentElement.classList.toggle('dark');
@@ -233,16 +234,21 @@ export default function ProfesorPortal({ clubName, aspirantes, onUpdateAspirante
       </nav>
 
       {/* ── Main ──────────────────────────────────────────────────────────── */}
-      <main className="flex-1 xl:ml-80 flex flex-col min-h-screen relative w-full print:hidden overflow-hidden bg-[#f8f9fa] dark:bg-[#0a0a0a]">
+      <main className="flex-1 xl:ml-80 flex flex-col min-h-screen relative print:hidden overflow-hidden bg-[#f8f9fa] dark:bg-[#0a0a0a] w-full xl:w-[calc(100%-20rem)]">
 
         {/* Top bar (SaaS Style) */}
-        <header className="bg-white dark:bg-[#151515] border-b border-stone-200/60 flex justify-between items-center w-full px-10 h-24 sticky top-0 z-30 flex-shrink-0">
+        <header className={`flex justify-between items-center w-full px-10 h-24 sticky top-0 z-30 flex-shrink-0 transition-colors ${
+          activeTab === 'perfil' 
+            ? 'bg-transparent border-transparent' 
+            : 'bg-white dark:bg-[#151515] border-b border-stone-200/60 dark:border-white/10'
+        }`}>
           <div className="flex items-center gap-8">
-            <h1 className="text-3xl font-black text-stone-800 dark:text-stone-100 tracking-tight hidden lg:block">
+            <h1 className={`text-3xl font-black text-stone-800 dark:text-stone-100 tracking-tight hidden lg:block ${activeTab === 'perfil' ? 'hidden lg:hidden' : ''}`}>
               {activeTab === 'dashboard' && 'Resumen Ejecutivo'}
               {activeTab === 'alumnos' && 'Directorio de Alumnos'}
               {activeTab === 'pagos' && 'Gestión de Facturación'}
               {activeTab === 'estadisticas' && 'Rendimiento y Estadísticas'}
+              {activeTab === 'perfil' && 'Configuración de Perfil'}
             </h1>
           </div>
         </header>
@@ -515,6 +521,15 @@ export default function ProfesorPortal({ clubName, aspirantes, onUpdateAspirante
               </div>
             </div>
           </div>
+        )}
+
+        {/* TAB: PERFIL */}
+        {activeTab === 'perfil' && (
+          <ConfiguracionPerfilFederativo 
+            roleName="Profesor de Club" 
+            defaultName={clubName} 
+            defaultEmail="No registrado"
+          />
         )}
 
         </div>

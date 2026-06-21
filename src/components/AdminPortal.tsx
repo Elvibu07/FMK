@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
 import { Aspirante, Tribunal, Convocatoria, EstadoDocumento, EstadoSolicitud, Documento, Judge } from '../types';
 import ActaImprimible from './ActaImprimible';
+import ConfiguracionPerfilFederativo from './ConfiguracionPerfilFederativo';
 import { useUI } from '../contexts/UIContext';
+import { supabase } from '../lib/supabase';
+import { createAspirante, createJudge } from '../lib/api';
+import { sendMagicLinkForFirstTime } from '../lib/auth';
 
 interface AdminPortalProps {
   aspirantes: Aspirante[];
@@ -17,9 +21,10 @@ interface AdminPortalProps {
   convocatorias: Convocatoria[];
   onUpdateConvocatorias: (updated: Convocatoria[]) => void;
   onUpdateConvocatoriaAtomic?: (id: string, updates: Partial<Convocatoria>) => void;
+  onAddConvocatoriaAtomic?: (newConv: Convocatoria) => void;
 }
 
-type AdminTab = 'dashboard' | 'kanban' | 'documentos' | 'convocatorias' | 'especiales' | 'estadisticas' | 'configuracion' | 'usuarios';
+type AdminTab = 'dashboard' | 'kanban' | 'documentos' | 'convocatorias' | 'especiales' | 'estadisticas' | 'configuracion' | 'usuarios' | 'perfil';
 
 const toggleDarkMode = () => {
   const isDark = document.documentElement.classList.toggle('dark');
@@ -67,6 +72,7 @@ export default function AdminPortal({
   convocatorias,
   onUpdateConvocatorias,
   onUpdateConvocatoriaAtomic,
+  onAddConvocatoriaAtomic,
 }: AdminPortalProps) {
   const { showToast, showConfirm, showAlert, showPrompt } = useUI();
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
@@ -82,7 +88,7 @@ export default function AdminPortal({
 
   // User Management
   const [showAddUserModal, setShowAddUserModal] = useState(false);
-  const [newUserType, setNewUserType] = useState<'juez'|'arbitro'|'deportista'>('juez');
+  const [newUserType, setNewUserType] = useState<'juez'|'arbitro'|'deportista'|'director'>('juez');
   const [newUserName, setNewUserName] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
 
@@ -92,8 +98,70 @@ export default function AdminPortal({
   const [newConvDate, setNewConvDate] = useState('2026-12-01');
   const [newConvSede, setNewConvSede] = useState('Pabellón FMK');
 
-  // Notifications
   const [showNotifications, setShowNotifications] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string>('');
+
+  interface NotificationItem {
+    id: string;
+    title: string;
+    desc: string;
+    time: string;
+    icon: string;
+    color: string;
+    bg: string;
+    read: boolean;
+    tab?: AdminTab;
+  }
+
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const prevAspirantesLen = React.useRef(aspirantes.length);
+
+  React.useEffect(() => {
+    // Solo notificar si aumentó la longitud y no es la primera carga inicial (length = 0)
+    if (aspirantes.length > prevAspirantesLen.current && prevAspirantesLen.current > 0) {
+      // Como hacemos unshift en localStorage, el más nuevo está en aspirantes[0]
+      const latestAsp = aspirantes[0];
+      if (latestAsp) {
+        setNotifications(prev => [{
+          id: Date.now().toString(),
+          title: 'Nueva Solicitud de Grado',
+          desc: `${latestAsp.name} ha solicitado el grado de ${latestAsp.requestedBelt}.`,
+          time: 'Justo ahora',
+          icon: 'person_add',
+          color: 'text-blue-600',
+          bg: 'bg-blue-100',
+          read: false,
+          tab: 'kanban'
+        }, ...prev]);
+        
+        // También podemos hacer que el botón suene o vibre
+        try {
+          const audio = new Audio('/notification.mp3'); // Opcional, ignora si no existe
+          audio.play().catch(() => {});
+        } catch (e) {}
+      }
+    }
+    prevAspirantesLen.current = aspirantes.length;
+  }, [aspirantes]);
+
+  const unreadCount = notifications.filter(n => !n.read).length;
+
+  const handleToggleNotifications = () => {
+    setShowNotifications(!showNotifications);
+    if (!showNotifications && unreadCount > 0) {
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    }
+  };
+
+  React.useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) setAvatarUrl(user.user_metadata?.avatar_url || '');
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) setAvatarUrl(session.user.user_metadata?.avatar_url || '');
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
   const handleAddUser = (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,47 +170,63 @@ export default function AdminPortal({
     showConfirm(
       'Confirmar Creación',
       `¿Estás seguro de que deseas crear una nueva cuenta para ${newUserName} (${newUserType})? Se enviarán las credenciales a su correo.`,
-      () => {
-        if (newUserType === 'deportista') {
-          const newId = `REQ-${Math.floor(1000 + Math.random() * 9000)}`;
-          const newAsp: Aspirante = {
-            id: newId,
-            name: newUserName,
-            email: newUserEmail,
-            club: 'Club Pendiente',
-            currentBelt: 'Cinturón Blanco',
-            requestedBelt: '1º Dan',
-            status: 'Borrador',
-            progressStep: 1,
-            documentos: [],
-            documents: { dni: { name: '', uploaded: false }, photo: { name: '', uploaded: false }, license: { name: '', uploaded: false } },
-            paymentStatus: 'Unpaid',
-            active: true
-          };
-          if (onAddAspiranteAtomic) {
-            onAddAspiranteAtomic(newAsp);
+      async () => {
+        try {
+          const emailLower = newUserEmail.trim().toLowerCase();
+          // 1. Send Magic Link via Supabase Auth (creates user if doesn't exist)
+          await sendMagicLinkForFirstTime(emailLower);
+
+          // 2. Create Profile in Database & Update Local State
+          if (newUserType === 'deportista') {
+            const newId = `REQ-${Math.floor(1000 + Math.random() * 9000)}`;
+            const newAsp: Aspirante = {
+              id: newId,
+              name: newUserName,
+              email: emailLower,
+              club: 'Club Pendiente',
+              currentBelt: 'Cinturón Blanco',
+              requestedBelt: '1º Dan',
+              status: 'Borrador',
+              progressStep: 1,
+              documentos: [],
+              documents: { dni: { name: '', uploaded: false }, photo: { name: '', uploaded: false }, license: { name: '', uploaded: false } },
+              paymentStatus: 'Unpaid',
+              active: true
+            };
+            
+            if (onAddAspiranteAtomic) {
+              onAddAspiranteAtomic(newAsp);
+            } else {
+              onUpdateAspirantes([newAsp, ...aspirantes]);
+            }
           } else {
-            onUpdateAspirantes([newAsp, ...aspirantes]);
+            const newId = `${newUserType === 'director' ? 'd' : (newUserType === 'juez' ? 'j' : 'a')}-${Math.floor(1000 + Math.random() * 9000)}`;
+            const rank = newUserType === 'director' ? 'Director' : (newUserType === 'juez' ? 'Juez Regional' : 'Árbitro Nacional');
+            const newJudge: Judge = {
+              id: newId,
+              name: newUserName,
+              email: emailLower,
+              avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(newUserName)}&background=random`,
+              rank: rank,
+              active: true
+            };
+            
+            if (onAddJudgeAtomic) {
+              onAddJudgeAtomic(newJudge);
+            } else if (onUpdateJudges) {
+              onUpdateJudges([newJudge, ...judges]);
+            }
           }
-        } else {
-          const newId = `${newUserType === 'juez' ? 'j' : 'a'}-${Math.floor(1000 + Math.random() * 9000)}`;
-          const rank = newUserType === 'juez' ? 'Juez Regional' : 'Árbitro Nacional';
-          const newJudge: Judge = {
-            id: newId,
-            name: newUserName,
-            email: newUserEmail,
-            avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(newUserName)}&background=random`,
-            rank: rank,
-            active: true
-          };
-          if (onUpdateJudges) onUpdateJudges([newJudge, ...judges]);
+          
+          setShowAddUserModal(false);
+          setNewUserName('');
+          setNewUserEmail('');
+          
+          showAlert('Usuario Creado', `Se agregó al usuario exitosamente y las credenciales fueron enviadas a ${emailLower}.`);
+        } catch (error: any) {
+          console.error("Error creating user:", error);
+          showAlert('Error al crear usuario', error.message || 'Ocurrió un error inesperado al conectar con el servidor.');
         }
-        
-        setShowAddUserModal(false);
-        setNewUserName('');
-        setNewUserEmail('');
-        
-        showAlert('Usuario Creado', `Se agregó al usuario exitosamente y las credenciales fueron enviadas al correo especificado.`);
       },
       'Crear y Notificar'
     );
@@ -213,7 +297,11 @@ export default function AdminPortal({
           cupoMaximo: 40,
           inscritos: 0,
         };
-        onUpdateConvocatorias([...convocatorias, nueva]);
+        if (onAddConvocatoriaAtomic) {
+          onAddConvocatoriaAtomic(nueva);
+        } else {
+          onUpdateConvocatorias([...convocatorias, nueva]);
+        }
         setShowAddConvModal(false);
         setNewConvTitle('Convocatoria Extraordinaria');
         setNewConvDate('2026-12-01');
@@ -379,9 +467,13 @@ export default function AdminPortal({
   };
 
   const updateConvEstado = (convId: string, newEstado: string) => {
-    onUpdateConvocatorias(convocatorias.map(c =>
-      c.id === convId ? { ...c, estado: newEstado as any } : c
-    ));
+    if (onUpdateConvocatoriaAtomic) {
+      onUpdateConvocatoriaAtomic(convId, { estado: newEstado as any });
+    } else {
+      onUpdateConvocatorias(convocatorias.map(c =>
+        c.id === convId ? { ...c, estado: newEstado as any } : c
+      ));
+    }
   };
 
   // ── Documento con más documentos faltantes ──
@@ -405,6 +497,7 @@ export default function AdminPortal({
     { id: 'estadisticas', label: 'Estadísticas',    icon: 'bar_chart' },
     { id: 'configuracion',label: 'Plataforma',      icon: 'settings' },
     { id: 'usuarios',     label: 'Usuarios',        icon: 'manage_accounts' },
+    { id: 'perfil',       label: 'Mi Perfil',       icon: 'person' },
   ];
 
   return (
@@ -487,45 +580,57 @@ export default function AdminPortal({
       </nav>
 
       {/* ── Main ──────────────────────────────────────────────────────────── */}
-      <main className="flex-1 xl:ml-80 flex flex-col min-h-screen relative w-full print:hidden overflow-hidden bg-[#f8f9fa] dark:bg-[#0a0a0a]">
+      <main className="flex-1 xl:ml-80 flex flex-col min-h-screen relative print:hidden overflow-hidden bg-[#f8f9fa] dark:bg-[#0a0a0a] w-full xl:w-[calc(100%-20rem)]">
 
         {/* Top bar (SaaS Style) */}
-        <header className="bg-white dark:bg-[#151515] border-b border-stone-200/60 flex justify-between items-center w-full px-10 h-24 sticky top-0 z-30 flex-shrink-0">
-          <div className="flex items-center gap-8">
-            <h1 className="text-3xl font-black text-stone-800 dark:text-stone-100 tracking-tight hidden lg:block">
-              {tabs.find(t => t.id === activeTab)?.label}
-            </h1>
-            <div className="hidden md:flex items-center relative w-64">
-              <span className="material-symbols-outlined absolute left-3 text-stone-400 text-[18px]">search</span>
-              <input
-                className="w-full pl-10 pr-3 py-1.5 bg-stone-100 dark:bg-white/10 border-transparent rounded-md text-xs focus:bg-white dark:bg-[#151515] focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-stone-500 dark:text-stone-400 text-stone-800 dark:text-stone-100 font-medium"
-                placeholder="Buscar aspirante..."
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-              />
-            </div>
-            <div className="flex items-center bg-stone-100 dark:bg-white/10 p-0.5 rounded-md overflow-hidden">
-              {(['All', 'Kyu', 'Dan'] as const).map(f => (
-                <button
-                  key={f}
-                  onClick={() => setGradeFilter(f)}
-                  className={`px-3 py-1 text-[11px] font-bold transition-all rounded-[4px] ${
-                    gradeFilter === f ? 'bg-white dark:bg-[#151515] text-indigo-600 shadow-sm' : 'text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:text-stone-200'
-                  }`}
-                >
-                  {f === 'All' ? 'TODOS' : f.toUpperCase()}
-                </button>
-              ))}
-            </div>
+        <header className={`flex items-center w-full px-10 h-24 z-30 flex-shrink-0 transition-all ${
+          activeTab === 'perfil' 
+            ? 'absolute top-0 right-0 bg-transparent border-transparent justify-end' 
+            : 'sticky top-0 bg-white dark:bg-[#151515] border-b border-stone-200/60 dark:border-white/10 justify-between'
+        }`}>
+          {activeTab !== 'perfil' && (
+            <div className="flex items-center gap-8">
+              <h1 className="text-3xl font-black text-stone-800 dark:text-stone-100 tracking-tight hidden lg:block">
+                {tabs.find(t => t.id === activeTab)?.label}
+              </h1>
+            {['kanban', 'documentos'].includes(activeTab) && (
+              <>
+                <div className="hidden md:flex items-center relative w-64">
+                  <span className="material-symbols-outlined absolute left-3 text-stone-400 text-[18px]">search</span>
+                  <input
+                    className="w-full pl-10 pr-3 py-1.5 bg-stone-100 dark:bg-white/10 border-transparent rounded-md text-xs focus:bg-white dark:bg-[#151515] focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-stone-500 dark:text-stone-400 text-stone-800 dark:text-stone-100 font-medium"
+                    placeholder="Buscar aspirante..."
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                  />
+                </div>
+                <div className="flex items-center bg-stone-100 dark:bg-white/10 p-0.5 rounded-md overflow-hidden">
+                  {(['All', 'Kyu', 'Dan'] as const).map(f => (
+                    <button
+                      key={f}
+                      onClick={() => setGradeFilter(f)}
+                      className={`px-3 py-1 text-[11px] font-bold transition-all rounded-[4px] ${
+                        gradeFilter === f ? 'bg-white dark:bg-[#151515] text-indigo-600 shadow-sm' : 'text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:text-stone-200'
+                      }`}
+                    >
+                      {f === 'All' ? 'TODOS' : f.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
-          <div className="flex items-center gap-4">
+          )}
+          <div className="flex items-center gap-4 ml-auto">
             <div className="relative">
               <button 
-                onClick={() => setShowNotifications(!showNotifications)}
-                className="text-stone-400 hover:text-stone-700 dark:text-stone-200 transition-colors relative"
+                onClick={handleToggleNotifications}
+                className={`text-stone-400 hover:text-stone-700 dark:text-stone-200 transition-colors relative flex items-center justify-center ${unreadCount > 0 ? 'animate-bounce text-amber-500' : ''}`}
               >
-                <span className="material-symbols-outlined text-[20px]">notifications</span>
-                <span className="absolute top-0 right-0 w-2 h-2 bg-rose-500 border-2 border-white rounded-full"></span>
+                <span className="material-symbols-outlined text-[24px]">notifications</span>
+                {unreadCount > 0 && (
+                  <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-rose-500 border-2 border-white rounded-full"></span>
+                )}
               </button>
               
               {/* Notifications Dropdown */}
@@ -533,58 +638,37 @@ export default function AdminPortal({
                 <div className="absolute right-0 mt-3 w-80 bg-white dark:bg-[#151515] border border-stone-200 dark:border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                   <div className="bg-stone-50 dark:bg-white/5 px-4 py-3 border-b border-stone-200 dark:border-white/10 flex justify-between items-center">
                     <h3 className="font-bold text-sm text-stone-800 dark:text-stone-100">Notificaciones</h3>
-                    <span className="bg-rose-100 text-rose-700 text-[10px] font-bold px-2 py-0.5 rounded-full">3 Nuevas</span>
+                    {unreadCount > 0 && (
+                      <span className="bg-rose-100 text-rose-700 text-[10px] font-bold px-2 py-0.5 rounded-full">{unreadCount} Nuevas</span>
+                    )}
                   </div>
                   <div className="max-h-80 overflow-y-auto">
-                    <div 
-                      onClick={() => { setActiveTab('usuarios'); setShowNotifications(false); }}
-                      className="px-4 py-3 border-b border-stone-100 dark:border-white/5 hover:bg-stone-50 dark:hover:bg-white/5 transition cursor-pointer opacity-100"
-                    >
-                      <div className="flex gap-3">
-                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 flex-shrink-0">
-                          <span className="material-symbols-outlined text-[16px]">person_add</span>
+                    {notifications.length === 0 ? (
+                      <div className="px-4 py-8 text-center text-stone-500 text-sm">No hay notificaciones.</div>
+                    ) : (
+                      notifications.map(n => (
+                        <div 
+                          key={n.id}
+                          onClick={() => { if(n.tab) setActiveTab(n.tab); setShowNotifications(false); }}
+                          className={`px-4 py-3 border-b border-stone-100 dark:border-white/5 hover:bg-stone-50 dark:hover:bg-white/5 transition cursor-pointer ${n.read ? 'opacity-70' : 'bg-blue-50/50 dark:bg-blue-900/10'}`}
+                        >
+                          <div className="flex gap-3">
+                            <div className={`w-8 h-8 rounded-full ${n.bg} flex items-center justify-center ${n.color} flex-shrink-0`}>
+                              <span className="material-symbols-outlined text-[16px]">{n.icon}</span>
+                            </div>
+                            <div>
+                              <p className={`text-xs ${n.read ? 'font-medium' : 'font-bold'} text-stone-800 dark:text-stone-100`}>{n.title}</p>
+                              <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-0.5 leading-snug">{n.desc}</p>
+                              <p className="text-[9px] text-stone-400 mt-1 font-mono">{n.time}</p>
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-xs font-bold text-stone-800 dark:text-stone-100">Nuevo registro de club</p>
-                          <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-0.5 leading-snug">El Club Karate-Do ha finalizado su registro.</p>
-                          <p className="text-[9px] text-stone-400 mt-1 font-mono">Hace 10 min</p>
-                        </div>
-                      </div>
-                    </div>
-                    <div 
-                      onClick={() => { setActiveTab('documentos'); setShowNotifications(false); }}
-                      className="px-4 py-3 border-b border-stone-100 dark:border-white/5 hover:bg-stone-50 dark:hover:bg-white/5 transition cursor-pointer opacity-100"
-                    >
-                      <div className="flex gap-3">
-                        <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 flex-shrink-0">
-                          <span className="material-symbols-outlined text-[16px]">description</span>
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-stone-800 dark:text-stone-100">Documentos pendientes</p>
-                          <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-0.5 leading-snug">Ana Silva ha subido su justificante de pago.</p>
-                          <p className="text-[9px] text-stone-400 mt-1 font-mono">Hace 45 min</p>
-                        </div>
-                      </div>
-                    </div>
-                    <div 
-                      onClick={() => { setActiveTab('estadisticas'); setShowNotifications(false); }}
-                      className="px-4 py-3 hover:bg-stone-50 dark:hover:bg-white/5 transition cursor-pointer opacity-100"
-                    >
-                      <div className="flex gap-3">
-                        <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600 flex-shrink-0">
-                          <span className="material-symbols-outlined text-[16px]">task_alt</span>
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-stone-800 dark:text-stone-100">Acta emitida</p>
-                          <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-0.5 leading-snug">El tribunal #1 ha emitido el acta oficial.</p>
-                          <p className="text-[9px] text-stone-400 mt-1 font-mono">Hace 2 horas</p>
-                        </div>
-                      </div>
-                    </div>
+                      ))
+                    )}
                   </div>
                   <div className="bg-stone-50 dark:bg-white/5 px-4 py-2 border-t border-stone-200 dark:border-white/10 text-center">
                     <button 
-                      onClick={() => setShowNotifications(false)}
+                      onClick={() => setNotifications(prev => prev.map(n => ({ ...n, read: true })))}
                       className="text-[11px] font-bold text-stone-500 hover:text-stone-800 dark:hover:text-stone-200 transition-colors"
                     >
                       Marcar todo como leído
@@ -593,11 +677,15 @@ export default function AdminPortal({
                 </div>
               )}
             </div>
-            <div className="w-px h-6 bg-stone-200"></div>
-            <div className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity">
-              <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-red-700 font-bold text-xs border border-red-200">
-                OC
-              </div>
+            <div className="w-px h-8 bg-stone-200"></div>
+            <div onClick={() => setActiveTab('perfil')} className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="Avatar" className="w-12 h-12 rounded-xl object-cover border border-stone-200 shadow-sm" />
+              ) : (
+                <div className="w-12 h-12 rounded-xl bg-red-100 flex items-center justify-center text-red-700 font-bold text-base border border-red-200 shadow-sm">
+                  OC
+                </div>
+              )}
             </div>
           </div>
         </header>
@@ -1085,52 +1173,151 @@ export default function AdminPortal({
         {activeTab === 'estadisticas' && (
           <div className="flex-1 overflow-y-auto p-8 bg-[#fafafa] dark:bg-[#0a0a0a]">
             <h1 className="font-black text-[24px] text-stone-800 dark:text-stone-100 tracking-tight mb-1">Estadísticas — RPT-06</h1>
-            <p className="text-sm text-stone-500 dark:text-stone-400 mb-8">Resumen de la convocatoria actual.</p>
+            <p className="text-sm text-stone-500 dark:text-stone-400 mb-8">Resumen de la convocatoria actual. Los datos se actualizan en tiempo real.</p>
 
+            {/* KPI Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
               {[
-                { label: 'Total Aspirantes', val: aspirantes.length, icon: 'group', color: 'text-on-surface' },
-                { label: 'Aptos (definitivos)', val: aptos, icon: 'verified', color: 'text-green-700' },
-                { label: 'No Aptos', val: noAptos, icon: 'cancel', color: 'text-red-700' },
-                { label: 'En trámite', val: aspirantes.length - aptos - noAptos, icon: 'pending', color: 'text-amber-700' },
+                { label: 'Total Aspirantes', val: aspirantes.length, icon: 'group', color: 'text-on-surface', bg: 'bg-stone-100 dark:bg-white/10' },
+                { label: 'Aptos (definitivos)', val: aptos, icon: 'verified', color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-900/20' },
+                { label: 'No Aptos', val: noAptos, icon: 'cancel', color: 'text-red-600', bg: 'bg-red-50 dark:bg-red-900/20' },
+                { label: 'En trámite', val: aspirantes.length - aptos - noAptos, icon: 'pending', color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/20' },
               ].map(m => (
                 <div key={m.label} className="bg-white dark:bg-[#151515] border border-stone-200 dark:border-white/20 rounded-xl p-5 shadow-sm">
-                  <span className="material-symbols-outlined text-stone-400 text-xl mb-2 block">{m.icon}</span>
+                  <div className={`w-9 h-9 ${m.bg} rounded-lg flex items-center justify-center mb-3`}>
+                    <span className={`material-symbols-outlined text-xl ${m.color}`}>{m.icon}</span>
+                  </div>
                   <p className={`font-black text-3xl ${m.color}`}>{m.val}</p>
                   <p className="font-bold text-[11px] text-stone-500 dark:text-stone-400 uppercase mt-1 tracking-wider">{m.label}</p>
                 </div>
               ))}
             </div>
 
+            {/* Line Chart — Solicitudes por mes */}
+            {(() => {
+              const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+              const now = new Date();
+              // Build last 6 months labels
+              const labels: string[] = [];
+              const counts: number[] = [];
+              for (let i = 5; i >= 0; i--) {
+                const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                labels.push(MESES[d.getMonth()]);
+                const mes = d.getMonth();
+                const anio = d.getFullYear();
+                counts.push(aspirantes.filter(a => {
+                  // Use id prefix as rough date proxy if no created_at
+                  return true; // will show 0 until real data
+                }).length > 0 ? 0 : 0);
+              }
+              // Use real aspirantes count spread dummy across last month for demo when data exists
+              counts[5] = aspirantes.length;
+
+              const W = 600; const H = 160;
+              const PAD = { t: 16, r: 24, b: 32, l: 36 };
+              const chartW = W - PAD.l - PAD.r;
+              const chartH = H - PAD.t - PAD.b;
+              const maxVal = Math.max(...counts, 1);
+              const pts = counts.map((v, i) => ({
+                x: PAD.l + (i / (counts.length - 1)) * chartW,
+                y: PAD.t + chartH - (v / maxVal) * chartH,
+                v,
+              }));
+              const pathD = pts.map((p,i) => `${i===0?'M':'L'}${p.x},${p.y}`).join(' ');
+              const areaD = `${pathD} L${pts[pts.length-1].x},${PAD.t+chartH} L${pts[0].x},${PAD.t+chartH} Z`;
+
+              return (
+                <div className="bg-white dark:bg-[#151515] border border-stone-200 dark:border-white/20 rounded-xl p-6 shadow-sm mb-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="font-bold text-sm text-stone-800 dark:text-stone-100">Solicitudes Registradas</h3>
+                      <p className="text-xs text-stone-400 mt-0.5">Últimos 6 meses</p>
+                    </div>
+                    <span className={`text-xs font-bold px-2 py-1 rounded-full ${aspirantes.length > 0 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-stone-100 text-stone-400 dark:bg-white/5'}`}>
+                      {aspirantes.length > 0 ? `${aspirantes.length} registros` : 'Sin datos aún'}
+                    </span>
+                  </div>
+                  <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{height: 160}}>
+                    <defs>
+                      <linearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#dc2626" stopOpacity="0.25"/>
+                        <stop offset="100%" stopColor="#dc2626" stopOpacity="0"/>
+                      </linearGradient>
+                    </defs>
+                    {/* Grid lines */}
+                    {[0,1,2,3].map(i => {
+                      const y = PAD.t + (i / 3) * chartH;
+                      return <line key={i} x1={PAD.l} y1={y} x2={W - PAD.r} y2={y} stroke="currentColor" strokeOpacity="0.07" strokeWidth="1"/>;
+                    })}
+                    {/* Area */}
+                    <path d={areaD} fill="url(#lineGrad)"/>
+                    {/* Line */}
+                    <path d={pathD} fill="none" stroke="#dc2626" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"/>
+                    {/* Dots */}
+                    {pts.map((p,i) => (
+                      <g key={i}>
+                        <circle cx={p.x} cy={p.y} r="4" fill="#dc2626" stroke="white" strokeWidth="2"/>
+                        {p.v > 0 && (
+                          <text x={p.x} y={p.y - 10} textAnchor="middle" fontSize="10" fill="#dc2626" fontWeight="700">{p.v}</text>
+                        )}
+                      </g>
+                    ))}
+                    {/* X Labels */}
+                    {labels.map((l, i) => (
+                      <text key={i} x={PAD.l + (i / (labels.length - 1)) * chartW} y={H - 6} textAnchor="middle" fontSize="10" fill="currentColor" fillOpacity="0.4" fontWeight="600">{l}</text>
+                    ))}
+                  </svg>
+                  {aspirantes.length === 0 && (
+                    <p className="text-center text-xs text-stone-400 mt-2 italic">La gráfica se llenará conforme se registren aspirantes</p>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Bar charts — Por Club y Por Grado */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-white dark:bg-[#151515] border border-stone-200 dark:border-white/20 rounded-xl p-6 shadow-sm">
                 <h3 className="font-bold text-sm text-stone-500 dark:text-stone-400 uppercase tracking-wider mb-4">Por Club</h3>
-                <div className="space-y-3">
-                  {Object.entries(byClub).sort((a,b) => b[1]-a[1]).map(([club, count]) => (
-                    <div key={club} className="flex items-center gap-3">
-                      <span className="font-sans text-xs flex-1 truncate text-stone-700 dark:text-stone-200 font-medium">{club}</span>
-                      <div className="w-24 h-2 bg-stone-100 dark:bg-white/10 rounded-full overflow-hidden">
-                        <div className="h-full bg-red-600" style={{ width: `${(count / aspirantes.length) * 100}%` }} />
+                {Object.entries(byClub).length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-stone-300 dark:text-stone-600 gap-2">
+                    <span className="material-symbols-outlined text-3xl">bar_chart</span>
+                    <p className="text-xs italic">Sin datos aún</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {Object.entries(byClub).sort((a,b) => b[1]-a[1]).map(([club, count]) => (
+                      <div key={club} className="flex items-center gap-3">
+                        <span className="font-sans text-xs flex-1 truncate text-stone-700 dark:text-stone-200 font-medium">{club}</span>
+                        <div className="w-24 h-2 bg-stone-100 dark:bg-white/10 rounded-full overflow-hidden">
+                          <div className="h-full bg-red-600 rounded-full transition-all" style={{ width: `${(count / aspirantes.length) * 100}%` }} />
+                        </div>
+                        <span className="font-bold font-mono text-[11px] text-stone-500 dark:text-stone-400 w-4 text-right">{count}</span>
                       </div>
-                      <span className="font-bold font-mono text-[11px] text-stone-500 dark:text-stone-400 w-4 text-right">{count}</span>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="bg-white dark:bg-[#151515] border border-stone-200 dark:border-white/20 rounded-xl p-6 shadow-sm">
                 <h3 className="font-bold text-sm text-stone-500 dark:text-stone-400 uppercase tracking-wider mb-4">Por Grado Solicitado</h3>
-                <div className="space-y-3">
-                  {Object.entries(byGrade).sort((a,b) => b[1]-a[1]).map(([grade, count]) => (
-                    <div key={grade} className="flex items-center gap-3">
-                      <span className="font-sans text-xs flex-1 truncate text-stone-700 dark:text-stone-200 font-medium">{grade}</span>
-                      <div className="w-24 h-2 bg-stone-100 dark:bg-white/10 rounded-full overflow-hidden">
-                        <div className="h-full bg-red-600" style={{ width: `${(count / aspirantes.length) * 100}%` }} />
+                {Object.entries(byGrade).length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-stone-300 dark:text-stone-600 gap-2">
+                    <span className="material-symbols-outlined text-3xl">military_tech</span>
+                    <p className="text-xs italic">Sin datos aún</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {Object.entries(byGrade).sort((a,b) => b[1]-a[1]).map(([grade, count]) => (
+                      <div key={grade} className="flex items-center gap-3">
+                        <span className="font-sans text-xs flex-1 truncate text-stone-700 dark:text-stone-200 font-medium">{grade}</span>
+                        <div className="w-24 h-2 bg-stone-100 dark:bg-white/10 rounded-full overflow-hidden">
+                          <div className="h-full bg-red-600 rounded-full transition-all" style={{ width: `${(count / aspirantes.length) * 100}%` }} />
+                        </div>
+                        <span className="font-bold font-mono text-[11px] text-stone-500 dark:text-stone-400 w-4 text-right">{count}</span>
                       </div>
-                      <span className="font-bold font-mono text-[11px] text-stone-500 dark:text-stone-400 w-4 text-right">{count}</span>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1284,6 +1471,21 @@ export default function AdminPortal({
                   </div>
                 ))}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ════════════════════════════════════════════════
+            TAB: PERFIL
+           ════════════════════════════════════════════════ */}
+        {activeTab === 'perfil' && (
+          <div className="flex-grow overflow-auto p-8 bg-[#fafafa] dark:bg-[#0a0a0a] flex flex-col items-start">
+            <div className="w-full max-w-6xl animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <ConfiguracionPerfilFederativo 
+                roleName="Administrador Central (Oficina Central)" 
+                defaultName="Elvia Heredia" 
+                defaultEmail="admin@fmk.com"
+              />
             </div>
           </div>
         )}
@@ -1475,11 +1677,12 @@ export default function AdminPortal({
               <div>
                 <select 
                   value={newUserType}
-                  onChange={e => setNewUserType(e.target.value as 'juez'|'arbitro'|'deportista')}
+                  onChange={e => setNewUserType(e.target.value as 'juez'|'arbitro'|'deportista'|'director')}
                   className="w-full p-2.5 bg-stone-50 dark:bg-white/5 border border-stone-200 dark:border-white/10 rounded-lg text-sm focus:ring-2 focus:ring-red-500 outline-none transition-all dark:text-white"
                 >
                   {activeTab === 'configuracion' ? (
                     <>
+                      <option value="director">Director de la FMK (Tribunal)</option>
                       <option value="juez">Juez / Evaluador de Grados</option>
                       <option value="arbitro">Árbitro</option>
                     </>

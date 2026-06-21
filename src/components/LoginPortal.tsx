@@ -1,21 +1,11 @@
 import React, { useState } from 'react';
 import { useUI } from '../contexts/UIContext';
-import { CLUBES_OFICIALES } from '../data';
-
-type UserRole = 'aspirante' | 'deportista' | 'admin' | 'tribunal' | 'profesor' | 'juez' | 'arbitro';
-
-export type LoginMode = 'estudiante' | 'federativo';
+import { signInWithPassword, sendMagicLinkForFirstTime, getUserRoleAndProfile, UserRoleType } from '../lib/auth';
 
 interface LoginPortalProps {
-  onLogin: (role: UserRole, userEmail?: string) => void;
-  onRegister: (data: { name: string; email: string; club: string; birthDate: string }) => void;
-  mode?: LoginMode;
+  onLogin: (role: UserRoleType, userEmail?: string) => void;
   onBack?: () => void;
-  aspirantes?: any[];
-  judges?: any[];
 }
-
-type Tab = 'deportista' | 'club' | 'federativo';
 
 const toggleDarkMode = () => {
   const isDark = document.documentElement.classList.toggle('dark');
@@ -23,83 +13,57 @@ const toggleDarkMode = () => {
   window.dispatchEvent(new Event('theme_changed'));
 };
 
-export default function LoginPortal({ onLogin, onRegister, mode = 'estudiante', onBack, aspirantes = [], judges = [] }: LoginPortalProps) {
+export default function LoginPortal({ onLogin, onBack }: LoginPortalProps) {
   const { showToast } = useUI();
-  // En modo federativo arranca en tab 'club', en modo estudiante en 'deportista'
-  const [activeTab, setActiveTab] = useState<Tab>(mode === 'federativo' ? 'club' : 'deportista');
-  const [email, setEmail]     = useState('');
+  
+  // States
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [fedId, setFedId]     = useState('');
-  const [error, setError]     = useState('');
+  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [isForgotMode, setIsForgotMode] = useState(false);
 
-  const [isRegistering, setIsRegistering] = useState(false);
-  const [isForgot, setIsForgot] = useState(false);
-  const [regName, setRegName] = useState('');
-  const [regClub, setRegClub] = useState('');
-  const [regBirth, setRegBirth] = useState('');
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    if (isRegistering) {
-      if (!regName.trim() || !email.trim() || !password.trim() || !regClub.trim() || !regBirth) {
-        setError('Por favor completa todos los campos obligatorios.');
-        return;
+    if (!email.trim()) { 
+      setError('Introduce tu correo electrónico.'); 
+      return; 
+    }
+
+    if (isForgotMode) {
+      // Flujo de Olvidé mi contraseña o Primera vez
+      setIsLoading(true);
+      try {
+        await sendMagicLinkForFirstTime(email.trim().toLowerCase());
+        showToast(`Enlace enviado a ${email}. Revisa tu bandeja de entrada para entrar y configurar tu contraseña.`, 'success');
+        setIsForgotMode(false); // volver al modo normal
+      } catch (err: any) {
+        setError('Error al enviar el enlace: ' + err.message);
+      } finally {
+        setIsLoading(false);
       }
-      onRegister({
-        name: regName.trim(),
-        email: email.trim().toLowerCase(),
-        club: regClub.trim(),
-        birthDate: regBirth
-      });
       return;
     }
 
-    if (isForgot) {
-      if (!email.trim()) { setError('Introduce tu correo electrónico.'); return; }
-      showToast(`Se ha enviado un enlace de recuperación a ${email}. Revisa tu bandeja de entrada.`, 'success');
-      setIsForgot(false);
+    // Flujo normal de Login con contraseña
+    if (!password.trim()) {
+      setError('Introduce tu contraseña.');
       return;
     }
 
-    if (activeTab === 'deportista') {
-      if (!email.trim() || !password.trim()) { setError('Introduce tus credenciales.'); return; }
-      
-      const foundAsp = aspirantes.find(a => a.email.toLowerCase() === email.trim().toLowerCase());
-      if (foundAsp && foundAsp.active === false) {
-        setError('Tu cuenta ha sido inhabilitada. Contacta con la federación.');
-        return;
+    setIsLoading(true);
+    try {
+      const session = await signInWithPassword(email.trim().toLowerCase(), password);
+      if (session) {
+        const { role, profileId } = await getUserRoleAndProfile(email.trim().toLowerCase());
+        onLogin(role, profileId || email.trim().toLowerCase());
       }
-
-      // Mock logic: if email is from the mock aspirante, log as aspirante, else deportista
-      if (email.toLowerCase().includes('alejandro')) {
-        onLogin('aspirante', email.trim().toLowerCase());
-      } else {
-        onLogin('deportista', email.trim().toLowerCase());
-      }
-    } else if (activeTab === 'club') {
-      if (!regClub.trim() || !password.trim()) { setError('Selecciona un club e introduce la contraseña.'); return; }
-      onLogin('profesor', regClub);
-    } else {
-      // Federativo
-      if (!fedId.trim() || !password.trim()) { setError('Introduce tu ID federativo y contraseña.'); return; }
-      
-      const foundJudge = judges.find(j => j.id.toLowerCase() === fedId.trim().toLowerCase());
-      if (foundJudge && foundJudge.active === false) {
-        setError('Tu cuenta ha sido inhabilitada. Contacta con la federación.');
-        return;
-      }
-
-      if (fedId.toLowerCase().includes('trib') || fedId.toLowerCase().includes('director')) {
-        onLogin('tribunal', fedId);
-      } else if (fedId.toLowerCase().includes('juez')) {
-        onLogin('juez', fedId);
-      } else if (fedId.toLowerCase().includes('arb')) {
-        onLogin('arbitro', fedId);
-      } else {
-        onLogin('admin');
-      }
+    } catch (err: any) {
+      setError('Credenciales incorrectas o usuario no encontrado.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -126,48 +90,34 @@ export default function LoginPortal({ onLogin, onRegister, mode = 'estudiante', 
             </div>
           </div>
           
-          {mode === 'estudiante' ? (
-            <>
-              <h2 className="text-5xl font-black leading-tight mb-6">
-                Portal del <br/>
-                <span className="text-primary-container">Estudiante</span>
-              </h2>
-              <p className="text-stone-300 text-lg max-w-lg leading-relaxed">
-                Accede a tu área personal, consulta convocatorias, sigue tu progreso de grados y gestiona tu solicitud de examen.
-              </p>
-            </>
-          ) : (
-            <>
-              <h2 className="text-5xl font-black leading-tight mb-6">
-                Portal <br/>
-                <span className="text-primary-container">Federativo FMK</span>
-              </h2>
-              <p className="text-stone-300 text-lg max-w-lg leading-relaxed">
-                Acceso exclusivo para personal autorizado: Técnicos de club, tribunales, administración y dirección del Departamento de Grados.
-              </p>
-            </>
-          )}
+          <h2 className="text-5xl font-black leading-tight mb-6">
+            Portal de <br/>
+            <span className="text-primary-container">Acceso</span>
+          </h2>
+          <p className="text-stone-300 text-lg max-w-lg leading-relaxed">
+            Inicia sesión con tu correo y contraseña. Si es tu primera vez o no recuerdas tu clave, solicítala al correo.
+          </p>
 
           <div className="flex gap-6 mt-12">
             <div className="flex items-center gap-3 bg-black/40 backdrop-blur-md border border-white/10 p-4 rounded-xl">
               <span className="material-symbols-outlined text-green-400">verified</span>
               <div>
                 <p className="text-sm font-bold">100% Digital</p>
-                <p className="text-xs text-stone-400">Cero papeleo</p>
+                <p className="text-xs text-stone-400">Sin contraseñas por defecto</p>
               </div>
             </div>
             <div className="flex items-center gap-3 bg-black/40 backdrop-blur-md border border-white/10 p-4 rounded-xl">
-              <span className="material-symbols-outlined text-blue-400">gavel</span>
+              <span className="material-symbols-outlined text-blue-400">security</span>
               <div>
-                <p className="text-sm font-bold">Actas Oficiales</p>
-                <p className="text-xs text-stone-400">Firma electrónica</p>
+                <p className="text-sm font-bold">Autenticación Segura</p>
+                <p className="text-xs text-stone-400">Supabase Auth</p>
               </div>
             </div>
           </div>
         </div>
 
         <div className="relative z-10 p-12 text-xs text-stone-500 dark:text-stone-400 flex justify-between font-mono">
-          <p>© 2026 Departamento Nacional de Grados.</p>
+          <p>© 2026 Club Karate Madrid · Elvia Heredia. Todos los derechos reservados.</p>
           <p>Normativa v4.2 Aplicada</p>
         </div>
       </div>
@@ -184,7 +134,6 @@ export default function LoginPortal({ onLogin, onRegister, mode = 'estudiante', 
             <h1 className="font-black text-xl tracking-widest uppercase text-on-surface">FMK Grados</h1>
           </div>
 
-          {/* Botón volver */}
           {onBack && (
             <button onClick={onBack} className="mb-6 flex items-center gap-1 text-sm text-secondary-custom hover:text-on-surface font-bold transition-colors">
               <span className="material-symbols-outlined text-sm">arrow_back</span>
@@ -194,43 +143,16 @@ export default function LoginPortal({ onLogin, onRegister, mode = 'estudiante', 
 
           <div className="mb-8">
             <h2 className="text-2xl font-black text-on-surface mb-2">
-              {isRegistering ? 'Crear Cuenta' : isForgot ? 'Recuperar Contraseña'
-                : mode === 'estudiante' ? 'Acceso Estudiantes'
-                : 'Portal Federativo'}
+              {isForgotMode ? 'Recuperar Acceso' : 'Portal FMK'}
             </h2>
             <p className="text-sm text-secondary-custom">
-              {isRegistering ? 'Únete a la plataforma para gestionar tus grados.'
-                : isForgot ? 'Te enviaremos instrucciones para restaurar el acceso.'
-                : mode === 'estudiante' ? 'Accede a tu panel personal de deportista o aspirante.'
-                : 'Acceso exclusivo para personal autorizado de la FMK.'}
+              {isForgotMode 
+                ? 'Ingresa tu correo para recibir un enlace de acceso seguro y configurar tu contraseña.'
+                : 'Usa tu correo y contraseña asignada.'}
             </p>
           </div>
 
-          {/* Role Tabs — solo se muestran según el modo */}
-          {!isRegistering && !isForgot && (
-            <div className="flex p-1 bg-surface-container-low dark:bg-white/5 rounded-lg mb-6 border border-outline-variant">
-              {mode === 'estudiante' ? (
-                <button className="flex-1 py-2 text-sm font-bold rounded-md bg-white dark:bg-[#151515] shadow-sm text-on-surface border border-outline-variant">
-                  Deportista / Aspirante
-                </button>
-              ) : (
-                <>
-                  <button
-                    onClick={() => setActiveTab('club')}
-                    className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${activeTab === 'club' ? 'bg-white dark:bg-[#151515] shadow-sm text-on-surface border border-outline-variant' : 'text-secondary-custom hover:text-on-surface'}`}
-                  >
-                    Técnico / Club
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('federativo')}
-                    className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${activeTab === 'federativo' ? 'bg-white dark:bg-[#151515] shadow-sm text-on-surface border border-outline-variant' : 'text-secondary-custom hover:text-on-surface'}`}
-                  >
-                    Personal Federativo
-                  </button>
-                </>
-              )}
-            </div>
-          )}
+
 
           {error && (
             <div className="mb-6 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg flex items-start gap-2">
@@ -241,112 +163,32 @@ export default function LoginPortal({ onLogin, onRegister, mode = 'estudiante', 
 
           <form onSubmit={handleSubmit} className="space-y-4">
             
-            {(activeTab === 'deportista' || isRegistering || isForgot) && (
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-on-surface uppercase tracking-wider">Correo Electrónico</label>
-                <div className="relative">
-                  <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary-custom text-lg">mail</span>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 bg-surface-container-low dark:bg-white/5est border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
-                    placeholder="tu@email.com"
-                  />
-                </div>
+            {/* Email */}
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-on-surface uppercase tracking-wider">Correo Electrónico</label>
+              <div className="relative">
+                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary-custom text-lg">mail</span>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 bg-surface-container-low border border-outline-variant rounded-xl text-on-surface focus:outline-none focus:ring-2 focus:ring-primary-custom focus:border-transparent transition-all"
+                  placeholder="ejemplo@correo.com"
+                />
               </div>
-            )}
+            </div>
 
-            {!isRegistering && !isForgot && activeTab === 'club' && (
+            {/* Password (Only if NOT in forgot mode) */}
+            {!isForgotMode && (
               <div className="space-y-1">
-                <label className="text-xs font-bold text-on-surface uppercase tracking-wider">Selecciona tu Club</label>
-                <div className="relative">
-                  <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary-custom text-lg">domain</span>
-                  <select
-                    value={regClub}
-                    onChange={e => setRegClub(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 bg-surface-container-low dark:bg-white/5est border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary-container focus:outline-none transition-all appearance-none text-on-surface"
-                  >
-                    <option value="" disabled>Selecciona un club...</option>
-                    {CLUBES_OFICIALES.map(club => (
-                      <option key={club} value={club}>{club}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            )}
-
-            {!isRegistering && !isForgot && activeTab === 'federativo' && (
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-on-surface uppercase tracking-wider">ID Federativo</label>
-                <div className="relative">
-                  <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary-custom text-lg">badge</span>
-                  <input
-                    type="text"
-                    value={fedId}
-                    onChange={e => setFedId(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 bg-surface-container-low dark:bg-white/5est border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
-                    placeholder="Ej. FED-102943"
-                  />
-                </div>
-              </div>
-            )}
-
-            {isRegistering && (
-              <>
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-on-surface uppercase tracking-wider">Nombre Completo</label>
-                  <input
-                    type="text"
-                    value={regName}
-                    onChange={e => setRegName(e.target.value)}
-                    className="w-full px-4 py-3 bg-surface-container-low dark:bg-white/5est border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-on-surface uppercase tracking-wider">Club</label>
-                    <select
-                      value={regClub}
-                      onChange={e => setRegClub(e.target.value)}
-                      className="w-full px-4 py-3 bg-surface-container-low dark:bg-white/5est border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary-container focus:outline-none transition-all appearance-none text-on-surface"
-                    >
-                      <option value="" disabled>Selecciona...</option>
-                      {CLUBES_OFICIALES.map(club => (
-                        <option key={club} value={club}>{club}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-on-surface uppercase tracking-wider">Nacimiento</label>
-                    <input
-                      type="date"
-                      value={regBirth}
-                      onChange={e => setRegBirth(e.target.value)}
-                      className="w-full px-4 py-3 bg-surface-container-low dark:bg-white/5est border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
-                    />
-                  </div>
-                </div>
-              </>
-            )}
-
-            {!isForgot && (
-              <div className="space-y-1">
-                <div className="flex justify-between items-center">
-                  <label className="text-xs font-bold text-on-surface uppercase tracking-wider">Contraseña</label>
-                  {!isRegistering && (
-                    <button type="button" onClick={() => { setIsForgot(true); setError(''); }} className="text-xs text-primary-container font-bold hover:underline">
-                      ¿Olvidaste tu contraseña?
-                    </button>
-                  )}
-                </div>
+                <label className="text-xs font-bold text-on-surface uppercase tracking-wider">Contraseña</label>
                 <div className="relative">
                   <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary-custom text-lg">lock</span>
                   <input
                     type="password"
                     value={password}
                     onChange={e => setPassword(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 bg-surface-container-low dark:bg-white/5est border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
+                    className="w-full pl-10 pr-4 py-3 bg-surface-container-low border border-outline-variant rounded-xl text-on-surface focus:outline-none focus:ring-2 focus:ring-primary-custom focus:border-transparent transition-all"
                     placeholder="••••••••"
                   />
                 </div>
@@ -355,53 +197,29 @@ export default function LoginPortal({ onLogin, onRegister, mode = 'estudiante', 
 
             <button
               type="submit"
-              className="w-full py-3 bg-primary-container text-on-primary-container font-black text-sm rounded-lg hover:brightness-110 transition-all shadow-md mt-6"
+              disabled={isLoading}
+              className="w-full bg-primary-custom hover:bg-stone-800 dark:bg-primary-container dark:text-on-primary-container dark:hover:bg-primary-custom text-white font-bold py-3 px-4 rounded-xl transition-all active:scale-[0.98] mt-6 flex justify-center items-center disabled:opacity-50"
             >
-              {isRegistering ? 'Crear Cuenta' : isForgot ? 'Enviar Enlace' : 'Acceder a la Plataforma'}
+              {isLoading ? (
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+              ) : isForgotMode ? 'Enviar Enlace' : 'Ingresar'}
             </button>
           </form>
 
-          {/* Toggle modes — solo en modo estudiante */}
-          <div className="mt-8 pt-6 border-t border-outline-variant text-center space-y-4">
-            {mode === 'estudiante' && !isRegistering && !isForgot && (
-              <p className="text-sm text-secondary-custom">
-                ¿No tienes cuenta?{' '}
-                <button onClick={() => { setIsRegistering(true); setError(''); }} className="text-primary-container font-bold hover:underline">
-                  Regístrate ahora
-                </button>
-              </p>
-            )}
-            {(isRegistering || isForgot) && (
-              <button onClick={() => { setIsRegistering(false); setIsForgot(false); setError(''); }} className="text-sm text-secondary-custom font-bold hover:underline flex items-center justify-center gap-1 mx-auto">
-                <span className="material-symbols-outlined text-sm">arrow_back</span> Volver al Login
+          <div className="mt-8 text-center">
+            {isForgotMode ? (
+              <button onClick={() => { setIsForgotMode(false); setError(''); }} className="text-sm text-secondary-custom hover:text-on-surface transition-colors font-bold">
+                Volver al inicio de sesión normal
+              </button>
+            ) : (
+              <button
+                onClick={() => { setIsForgotMode(true); setError(''); }}
+                className="text-sm font-bold text-primary-custom hover:underline"
+              >
+                ¿Olvidaste tu contraseña o es tu primera vez?
               </button>
             )}
           </div>
-
-          {/* Quick Demo Access — solo modo estudiante */}
-          {mode === 'estudiante' && !isRegistering && !isForgot && (
-             <div className="mt-8 p-4 bg-amber-50 border border-amber-200 rounded-xl relative overflow-hidden group">
-               <div className="absolute top-0 left-0 w-1 h-full bg-amber-400"></div>
-               <p className="text-[10px] uppercase font-black text-amber-800 tracking-widest mb-3">🔑 Testing Rápido</p>
-               <div className="flex flex-wrap gap-2">
-                 <button onClick={() => onLogin('deportista', 'ana.silva@ejemplo.com')} className="text-xs bg-white dark:bg-[#151515] border border-amber-200 px-3 py-1.5 rounded shadow-sm font-bold text-amber-900 hover:bg-amber-100">Ana (Deportista)</button>
-                 <button onClick={() => onLogin('aspirante', 'alejandro.ruiz@ejemplo.com')} className="text-xs bg-white dark:bg-[#151515] border border-amber-200 px-3 py-1.5 rounded shadow-sm font-bold text-amber-900 hover:bg-amber-100">Alejandro (Aspirante)</button>
-               </div>
-             </div>
-          )}
-          {mode === 'federativo' && !isRegistering && !isForgot && (
-             <div className="mt-8 p-4 bg-amber-50 border border-amber-200 rounded-xl relative overflow-hidden group">
-               <div className="absolute top-0 left-0 w-1 h-full bg-amber-400"></div>
-               <p className="text-[10px] uppercase font-black text-amber-800 tracking-widest mb-3">🔑 Testing Rápido</p>
-               <div className="flex flex-wrap gap-2">
-                 <button onClick={() => onLogin('admin')} className="text-xs bg-white dark:bg-[#151515] border border-amber-200 px-3 py-1.5 rounded shadow-sm font-bold text-amber-900 hover:bg-amber-100">Administración (Oficina)</button>
-                 <button onClick={() => onLogin('juez', 'j-1')} className="text-xs bg-white dark:bg-[#151515] border border-amber-200 px-3 py-1.5 rounded shadow-sm font-bold text-amber-900 hover:bg-amber-100">Juez Evaluador (Mesa)</button>
-                 <button onClick={() => onLogin('arbitro', 'Arb-Kumite-01')} className="text-xs bg-white dark:bg-[#151515] border border-amber-200 px-3 py-1.5 rounded shadow-sm font-bold text-amber-900 hover:bg-amber-100">Árbitro (Kumite)</button>
-                 <button onClick={() => onLogin('tribunal')} className="text-xs bg-white dark:bg-[#151515] border border-amber-200 px-3 py-1.5 rounded shadow-sm font-bold text-amber-900 hover:bg-amber-100">Director (Tribunal)</button>
-               </div>
-             </div>
-          )}
-
         </div>
       </div>
     </div>

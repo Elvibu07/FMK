@@ -283,4 +283,11 @@ export interface Aspirante {
   birthDate?: string;       // ISO "YYYY-MM-DD"
   dispensaMedica?: DispensaMedica;
   meritos?: MeritoDeportivo[];
+
+  // Apto Médico Federativo
+  aptoMedico?: {
+    estado: 'pendiente' | 'apto' | 'no_apto';
+    nota?: string;
+    fecha?: string;
+  };
 }

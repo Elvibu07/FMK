@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Aspirante, Judge, Tribunal, Convocatoria, Evaluacion, ParteBloqueComun, VotoJuez, ViaExamen } from '../types';
 import { GRADOS_CONFIG } from '../data';
 import ActaImprimible from './ActaImprimible';
+import ConfiguracionPerfilFederativo from './ConfiguracionPerfilFederativo';
 import { useUI } from '../contexts/UIContext';
 
 interface TribunalsPortalProps {
@@ -18,7 +19,7 @@ interface TribunalsPortalProps {
   convocatorias: Convocatoria[];
 }
 
-type TribunalTab = 'dashboard' | 'tribunales' | 'evaluacion' | 'historial' | 'jueces' | 'reglas';
+type TribunalTab = 'dashboard' | 'tribunales' | 'evaluacion' | 'historial' | 'jueces' | 'reglas' | 'perfil';
 
 const toggleDarkMode = () => {
   const isDark = document.documentElement.classList.toggle('dark');
@@ -265,6 +266,7 @@ export default function TribunalsPortal({
     { id: 'historial',  label: 'Historial Actas',icon: 'history' },
     { id: 'jueces',     label: 'Padrón Jueces',  icon: 'manage_accounts' },
     { id: 'reglas',     label: 'Reglas Grado',   icon: 'policy' },
+    { id: 'perfil',     label: 'Mi Perfil',      icon: 'person' },
   ];
 
   return (
@@ -1058,6 +1060,20 @@ export default function TribunalsPortal({
             </div>
           </main>
         )}
+
+        {/* ════════════════════════════════════════════════
+            TAB: PERFIL
+           ════════════════════════════════════════════════ */}
+        {activeTab === 'perfil' && (
+          <main className="flex-1 p-6 lg:p-10 animate-in fade-in slide-in-from-bottom-4 duration-500 w-full flex flex-col items-start">
+            <ConfiguracionPerfilFederativo 
+              roleName="Administrador de Tribunales" 
+              defaultName="Director de Tribunales" 
+              defaultEmail="No registrado"
+            />
+          </main>
+        )}
+
       </div>
       </main>
 

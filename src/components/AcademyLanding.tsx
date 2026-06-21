@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'motion/react';
 
 interface AcademyLandingProps {
   onGoToPortal: () => void;
-  onGoToStudentPortal: () => void;
 }
 
 const toggleDarkMode = () => {
@@ -64,7 +63,7 @@ const DISCIPLINAS = [
   },
 ];
 
-export default function AcademyLanding({ onGoToPortal, onGoToStudentPortal }: AcademyLandingProps) {
+export default function AcademyLanding({ onGoToPortal }: AcademyLandingProps) {
   const [horarioModal, setHorarioModal] = useState<string | null>(null);
 
   return (
@@ -93,13 +92,7 @@ export default function AcademyLanding({ onGoToPortal, onGoToStudentPortal }: Ac
             <button onClick={toggleDarkMode} className="w-10 h-10 rounded-full bg-stone-100 dark:bg-white/5 flex items-center justify-center text-stone-500 dark:text-stone-400 hover:text-stone-800 dark:hover:text-white transition-colors" title="Cambiar Tema">
               <span className="material-symbols-outlined text-[20px]">dark_mode</span>
             </button>
-            <button
-              onClick={onGoToStudentPortal}
-              className="bg-white hover:bg-stone-100 text-stone-900 border border-stone-200 px-5 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center gap-2"
-            >
-              <span className="material-symbols-outlined text-[18px]">person</span>
-              Acceso Alumnos
-            </button>
+
             <button
               onClick={onGoToPortal}
               className="bg-red-700 hover:bg-red-800 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-red-700/20 hover:-translate-y-0.5 transition-all flex items-center gap-2"
@@ -312,13 +305,7 @@ export default function AcademyLanding({ onGoToPortal, onGoToStudentPortal }: Ac
               <li><a href="#" className="hover:text-red-500 transition-colors">Real Federación Española (RFEK)</a></li>
               <li><a href="#" className="hover:text-red-500 transition-colors">Normativa de Grados</a></li>
               <li className="pt-4 flex flex-col gap-2">
-                <button
-                  onClick={onGoToStudentPortal}
-                  className="w-full bg-white text-stone-900 hover:bg-stone-200 px-4 py-2 rounded-lg font-bold transition-colors flex items-center justify-center gap-2"
-                >
-                  <span className="material-symbols-outlined text-sm">person</span>
-                  Acceso Alumnos
-                </button>
+
                 <button
                   onClick={onGoToPortal}
                   className="w-full bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg font-bold transition-colors flex items-center justify-center gap-2"
@@ -332,7 +319,7 @@ export default function AcademyLanding({ onGoToPortal, onGoToStudentPortal }: Ac
         </div>
 
         <div className="max-w-7xl mx-auto px-6 mt-16 pt-8 border-t border-white/10 flex flex-col md:flex-row items-center justify-between text-xs">
-          <p>© 2026 Club Karate Madrid · <span className="text-red-400 font-bold">Elvia Heredia</span>. Todos los derechos reservados.</p>
+          <p>© 2026 Club Karate Madrid · Elvia Heredia. Todos los derechos reservados.</p>
           <div className="flex gap-4 mt-4 md:mt-0">
             <a href="#" className="hover:text-white transition-colors">Aviso Legal</a>
             <a href="#" className="hover:text-white transition-colors">Política de Privacidad</a>

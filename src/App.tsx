@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Aspirante, Judge, Tribunal, Convocatoria } from './types';
 import * as api from './lib/api';
+import { supabase } from './lib/supabase';
 import LoginPortal from './components/LoginPortal';
 import AspirantPortal from './components/AspirantPortal';
 import DeportistaPortal from './components/DeportistaPortal';
@@ -10,21 +11,25 @@ import ProfesorPortal from './components/ProfesorPortal';
 import AcademyLanding from './components/AcademyLanding';
 import JudgePortal from './components/JudgePortal';
 import ArbitroPortal from './components/ArbitroPortal';
-import { type LoginMode } from './components/LoginPortal';
+import MedicoPortal from './components/MedicoPortal';
 
-type AppRole = 'landing' | 'login' | 'deportista' | 'aspirante' | 'admin' | 'tribunal' | 'profesor' | 'juez' | 'arbitro';
+
+type AppRole = 'landing' | 'login' | 'deportista' | 'aspirante' | 'admin' | 'tribunal' | 'profesor' | 'juez' | 'arbitro' | 'medico';
 
 export default function App() {
   const [role, setRole] = useState<AppRole>('landing');
-  const [loginMode, setLoginMode] = useState<LoginMode>('estudiante');
-  const [activeUserId, setActiveUserId] = useState<string>('REQ-8492');
-  const [activeClubName, setActiveClubName] = useState<string>('');
+
+  const [activeUserId, setActiveUserId] = useState<string | null>(null);
+  const [activeClubName, setActiveClubName] = useState<string>('Club Karate Madrid');
   const [showDemoBar, setShowDemoBar] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     return localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
   });
 
   const [isLoading, setIsLoading] = useState(true);
+  const [showPasswordSetup, setShowPasswordSetup] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [isSavingPassword, setIsSavingPassword] = useState(false);
   const [aspirantes, setAspirantes] = useState<Aspirante[]>([]);
   const [tribunals, setTribunals] = useState<Tribunal[]>([]);
   const [convocatorias, setConvocatorias] = useState<Convocatoria[]>([]);
@@ -32,21 +37,65 @@ export default function App() {
 
   // ── Fetch from Supabase ───────────────────────────────────────────────────
   useEffect(() => {
+    let didFinish = false;
+    
+    // Safety net: if loadData hangs for ANY reason, force-show the app after 8s
+    const safetyTimer = setTimeout(() => {
+      if (!didFinish) {
+        console.warn('[App] ⏰ Safety timeout triggered — forcing app to render');
+        setIsLoading(false);
+      }
+    }, 8000);
+
     async function loadData() {
       setIsLoading(true);
-      const [aspData, tribData, convData, judgeData] = await Promise.all([
-        api.fetchAspirantes(),
-        api.fetchTribunals(),
-        api.fetchConvocatorias(),
-        api.fetchJudges(),
-      ]);
-      setAspirantes(aspData);
-      setTribunals(tribData);
-      setConvocatorias(convData);
-      setJudges(judgeData);
-      setIsLoading(false);
+      try {
+        // Load data — each function returns [] on error, so this won't throw
+        const [aspData, convData, tribData, judgeData] = await Promise.all([
+          api.fetchAspirantes().catch(() => []),
+          api.fetchConvocatorias().catch(() => []),
+          api.fetchTribunals().catch(() => []),
+          api.fetchJudges().catch(() => [])
+        ]);
+        setAspirantes(aspData);
+        setConvocatorias(convData);
+        setTribunals(tribData);
+        setJudges(judgeData);
+        console.log('[App] ✅ Data loaded:', { aspirantes: aspData.length, convocatorias: convData.length, tribunals: tribData.length, judges: judgeData.length });
+
+        // Check auth session — wrap in its own race with 5s timeout
+        try {
+          const authResult = await Promise.race([
+            supabase.auth.getSession(),
+            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Auth timeout')), 5000))
+          ]);
+          const session = (authResult as any)?.data?.session;
+          if (session && session.user.email) {
+            if (window.location.href.includes('type=recovery')) {
+              setShowPasswordSetup(true);
+              window.history.replaceState({}, document.title, window.location.pathname);
+            }
+            
+            const { getUserRoleAndProfile } = await import('./lib/auth');
+            const { role, profileId } = await getUserRoleAndProfile(session.user.email);
+            if (role) {
+              handleLogin(role, profileId || session.user.email);
+            }
+          }
+        } catch (authErr) {
+          console.warn('[App] ⚠️ Auth check skipped:', (authErr as Error).message);
+        }
+      } catch (err) {
+        console.error('[App] Error loading initial data', err);
+      } finally {
+        didFinish = true;
+        clearTimeout(safetyTimer);
+        setIsLoading(false);
+      }
     }
     loadData();
+
+    return () => clearTimeout(safetyTimer);
   }, []);
 
   // ── Sincronizar Cambios Atómicos ──────────────────────────────────────────
@@ -77,7 +126,21 @@ export default function App() {
     await api.updateJudge(id, updates);
   };
 
-
+  const addConvocatoriaAtomic = async (newConv: Convocatoria) => {
+    console.log('[addConvocatoriaAtomic] Saving to Supabase:', newConv);
+    setConvocatorias(prev => [...prev, newConv]);
+    try {
+      const success = await api.createConvocatoria(newConv);
+      if (success) {
+        console.log('[addConvocatoriaAtomic] ✅ Saved successfully!');
+      } else {
+        console.error('[addConvocatoriaAtomic] ❌ createConvocatoria returned false');
+      }
+    } catch (err) {
+      console.error('[addConvocatoriaAtomic] ❌ Exception:', err);
+      alert('Error al guardar convocatoria: ' + (err as Error).message);
+    }
+  };
 
   const addAspiranteAtomic = async (newAspirante: Aspirante) => {
     setAspirantes(prev => [newAspirante, ...prev]);
@@ -96,78 +159,36 @@ export default function App() {
   }, [isDarkMode]);
 
   // ── Login handler ─────────────────────────────────────────────────────────
-  const handleLogin = (
-    userRole: 'aspirante' | 'deportista' | 'admin' | 'tribunal' | 'profesor' | 'juez' | 'arbitro',
-    userEmail?: string
-  ) => {
-    if (userRole === 'aspirante' || userRole === 'deportista') {
-      const email = (userEmail || '').toLowerCase();
-      const found = aspirantes.find(a => a.email.toLowerCase() === email);
+  const handleLogin = (userRole: string, profileIdOrEmail?: string) => {
+    const identifier = profileIdOrEmail?.toLowerCase() || '';
 
-      if (found) {
-        setActiveUserId(found.id);
+    if (userRole === 'deportista' || userRole === 'aspirante') {
+      const foundAsp = aspirantes.find(a => a.email.toLowerCase() === identifier || a.id.toLowerCase() === identifier);
+      if (foundAsp) {
+        setActiveUserId(foundAsp.id);
+      } else if (profileIdOrEmail && profileIdOrEmail.startsWith('REQ-')) {
+        setActiveUserId(profileIdOrEmail);
       } else {
-        // Crear deportista nuevo si no existe
-        const newId = `REQ-${Math.floor(1000 + Math.random() * 9000)}`;
-        const rawName = email.split('@')[0].replace(/[._]/g, ' ');
-        const name = rawName.replace(/\b\w/g, c => c.toUpperCase());
-        const newAspirante: Partial<Aspirante> = {
-          id: newId,
-          name,
-          email,
-          club: 'Club Karate Madrid',
-          currentBelt: 'Cinturón Blanco',
-          requestedBelt: '1º Dan',
-          status: 'Borrador',
-          progressStep: 1,
-          paymentStatus: 'Unpaid',
-        };
-        // Optimistic UI
-        setAspirantes(prev => [{ ...newAspirante, documentos: [], documents: { dni: { name: '', uploaded: false }, photo: { name: '', uploaded: false }, license: { name: '', uploaded: false } } } as Aspirante, ...prev]);
-        setActiveUserId(newId);
-        // Persist to Supabase
-        api.createAspirante(newAspirante);
+        // Fallback para cuando el estado local aún no se actualiza,
+        // pero getUserRoleAndProfile ya nos devolvió el ID real
+        setActiveUserId(profileIdOrEmail || 'REQ-0000');
       }
-      setRole(userRole);
+      setRole(userRole as AppRole);
     } else if (userRole === 'profesor') {
-      setActiveClubName(userEmail && userEmail.trim().length > 0 ? userEmail : 'Club Karate Madrid');
+      setActiveClubName(profileIdOrEmail && profileIdOrEmail.trim().length > 0 ? profileIdOrEmail : 'Club Karate Madrid');
       setRole('profesor');
     } else if (userRole === 'juez') {
-      setActiveUserId(userEmail || 'j-1');
+      setActiveUserId(profileIdOrEmail || 'j-1');
       setRole('juez');
     } else if (userRole === 'arbitro') {
-      setActiveUserId(userEmail || 'Arb-Kumite-01');
+      setActiveUserId(profileIdOrEmail || 'Arb-Kumite-01');
       setRole('arbitro');
     } else {
-      setRole(userRole);
+      setRole(userRole as AppRole);
     }
   };
 
-  const handleRegister = async (data: { name: string; email: string; club: string; birthDate: string }) => {
-    const newId = `REQ-${Math.floor(1000 + Math.random() * 9000)}`;
-    const newAspirante: Partial<Aspirante> = {
-      id: newId,
-      name: data.name,
-      email: data.email.toLowerCase(),
-      club: data.club,
-      birthDate: data.birthDate,
-      currentBelt: 'Cinturón Blanco',
-      requestedBelt: 'Cinturón Amarillo',
-      status: 'Borrador',
-      progressStep: 1,
-      paymentStatus: 'Unpaid',
-      licenciasConsecutivas: 0,
-      licenciasAcumuladas: 0,
-    };
-    
-    // Optimistic Update
-    setAspirantes(prev => [{ ...newAspirante, documentos: [], documents: { dni: { name: '', uploaded: false }, photo: { name: '', uploaded: false }, license: { name: '', uploaded: false } } } as Aspirante, ...prev]);
-    setActiveUserId(newId);
-    setRole('deportista');
 
-    // Supabase Create
-    await api.createAspirante(newAspirante);
-  };
 
   const activeUser = aspirantes.find(a => a.id === activeUserId) || aspirantes[0];
 
@@ -183,6 +204,24 @@ export default function App() {
 
   const isDev = import.meta.env.DEV;
 
+  const handleSavePassword = async () => {
+    if (newPassword.length < 6) {
+      alert('La contraseña debe tener al menos 6 caracteres.');
+      return;
+    }
+    setIsSavingPassword(true);
+    try {
+      const { updatePassword } = await import('./lib/auth');
+      await updatePassword(newPassword);
+      setShowPasswordSetup(false);
+      alert('Contraseña configurada exitosamente. Ya puedes acceder.');
+    } catch (err: any) {
+      alert('Error al guardar: ' + err.message);
+    } finally {
+      setIsSavingPassword(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className={`min-h-screen flex items-center justify-center ${isDarkMode ? 'bg-[#0a0a0a] text-white' : 'bg-stone-50 text-stone-900'}`}>
@@ -195,7 +234,35 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col relative">
+
+      {showPasswordSetup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
+          <div className="bg-surface-custom border border-outline-variant rounded-2xl p-8 max-w-md w-full shadow-2xl">
+            <div className="flex justify-center mb-6">
+              <span className="material-symbols-outlined text-4xl text-primary-custom">lock_reset</span>
+            </div>
+            <h2 className="text-2xl font-black text-center mb-2">Configura tu Contraseña</h2>
+            <p className="text-sm text-secondary-custom text-center mb-6">
+              Has verificado tu correo correctamente. Ahora, crea una contraseña segura para tus futuros accesos.
+            </p>
+            <input 
+              type="password"
+              placeholder="Nueva Contraseña"
+              value={newPassword}
+              onChange={e => setNewPassword(e.target.value)}
+              className="w-full px-4 py-3 bg-surface-container-low border border-outline-variant rounded-xl focus:ring-2 focus:ring-primary-custom mb-4"
+            />
+            <button
+              onClick={handleSavePassword}
+              disabled={isSavingPassword}
+              className="w-full bg-primary-custom text-white font-bold py-3 rounded-xl hover:opacity-90 disabled:opacity-50"
+            >
+              {isSavingPassword ? 'Guardando...' : 'Guardar y Continuar'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Barra debug (solo en desarrollo) ── */}
       {isDev && showDemoBar && (
@@ -213,6 +280,7 @@ export default function App() {
               { label: '🥋 ASPIRANTE',   r: 'aspirante'  as AppRole, email: 'alejandro.ruiz@ejemplo.com' },
               { label: '📊 ADMIN',       r: 'admin'      as AppRole },
               { label: '⚖️ TRIBUNAL',   r: 'tribunal'   as AppRole },
+              { label: '🩺 MÉDICO',     r: 'medico'     as AppRole },
             ].map(({ label, r, email }) => (
               <button
                 key={r}
@@ -276,28 +344,49 @@ export default function App() {
       <div className="flex-1 flex flex-col">
         {role === 'landing' && (
           <AcademyLanding
-            onGoToPortal={() => { setLoginMode('federativo'); setRole('login'); }}
-            onGoToStudentPortal={() => { setLoginMode('estudiante'); setRole('login'); }}
+            onGoToPortal={() => setRole('login')}
           />
         )}
 
         {role === 'login' && (
           <LoginPortal
             onLogin={handleLogin}
-            onRegister={handleRegister}
-            mode={loginMode}
             onBack={() => setRole('landing')}
           />
         )}
 
-        {role === 'deportista' && activeUser && (
-          <DeportistaPortal
-            deportista={activeUser}
-            onUpdateDeportista={handleUpdateAspirante}
-            onLogout={() => setRole('login')}
-            convocatorias={convocatorias}
-            onIniciarSolicitud={handleIniciarSolicitud}
-          />
+        {role === 'deportista' && (
+          activeUser ? (
+            <DeportistaPortal
+              deportista={activeUser}
+              onUpdateDeportista={handleUpdateAspirante}
+              onLogout={async () => { 
+                const { signOut } = await import('./lib/auth');
+                await signOut();
+                setRole('login'); 
+              }}
+              convocatorias={convocatorias}
+              onIniciarSolicitud={handleIniciarSolicitud}
+            />
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center animate-in fade-in">
+              <span className="material-symbols-outlined text-6xl text-stone-300 dark:text-stone-700 mb-4">account_circle_off</span>
+              <h2 className="text-2xl font-black text-stone-800 dark:text-stone-100 mb-2">Perfil no encontrado</h2>
+              <p className="text-stone-500 max-w-md mb-6">
+                Tu cuenta ha sido autenticada, pero no encontramos un expediente de deportista asociado a este correo. Por favor, contacta a tu club o a la federación.
+              </p>
+              <button 
+                onClick={async () => { 
+                  const { signOut } = await import('./lib/auth');
+                  await signOut();
+                  setRole('login'); 
+                }}
+                className="px-6 py-2 bg-red-700 text-white rounded-lg font-bold shadow-md hover:bg-red-800 transition-colors"
+              >
+                Cerrar Sesión
+              </button>
+            </div>
+          )
         )}
 
         {role === 'aspirante' && activeUser && (
@@ -326,6 +415,7 @@ export default function App() {
             convocatorias={convocatorias}
             onUpdateConvocatorias={setConvocatorias}
             onUpdateConvocatoriaAtomic={updateConvocatoriaAtomic}
+            onAddConvocatoriaAtomic={addConvocatoriaAtomic}
           />
         )}
 
@@ -374,6 +464,19 @@ export default function App() {
             onUpdateAspirantes={setAspirantes}
             onUpdateAspiranteAtomic={updateAspiranteAtomic}
             onLogout={() => setRole('login')}
+          />
+        )}
+
+        {role === 'medico' && (
+          <MedicoPortal
+            aspirantes={aspirantes}
+            convocatorias={convocatorias}
+            onUpdateAspirante={updateAspiranteAtomic}
+            onLogout={async () => {
+              const { signOut } = await import('./lib/auth');
+              await signOut();
+              setRole('login');
+            }}
           />
         )}
       </div>
