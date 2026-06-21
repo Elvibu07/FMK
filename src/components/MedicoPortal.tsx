@@ -47,10 +47,11 @@ export default function MedicoPortal({ aspirantes, convocatorias, onUpdateAspira
   const [selectedDispensa, setSelectedDispensa] = useState<Aspirante | null>(null);
   const [isSavingDispensa, setIsSavingDispensa] = useState(false);
 
-  const candidatos = aspirantes.filter(a =>
-    ['Admitida', 'En evaluación', 'Apto provisional', 'No Apto provisional', 'Acta emitida', 'Cerrada'].includes(a.status)
+  const candidatos = aspirantes.filter(a => a.status !== 'Borrador');
+  const historial = aspirantes.filter(a => 
+    (a.aptoMedico && a.aptoMedico.estado !== 'pendiente') ||
+    (a.dispensaMedica && a.dispensaMedica.aprobada !== undefined)
   );
-  const historial = aspirantes.filter(a => a.aptoMedico && a.aptoMedico.estado !== 'pendiente');
   const dispensas = aspirantes.filter(a => a.dispensaMedica?.solicitada);
 
   const filtered = candidatos.filter(a => {
@@ -302,18 +303,36 @@ export default function MedicoPortal({ aspirantes, convocatorias, onUpdateAspira
                             </tr>
                           </thead>
                           <tbody>
-                            {historial.map((a, i) => (
+                            {historial.map((a, i) => {
+                              const hasApto = a.aptoMedico && a.aptoMedico.estado !== 'pendiente';
+                              const hasDispensa = a.dispensaMedica && a.dispensaMedica.aprobada !== undefined;
+                              
+                              return (
                               <tr key={a.id} className={`border-b border-stone-50 dark:border-white/5 hover:bg-stone-50 dark:hover:bg-white/5 transition-colors ${i % 2 === 0 ? '' : 'bg-stone-50/50 dark:bg-white/[0.02]'}`}>
                                 <td className="px-6 py-4 font-bold text-base text-stone-900 dark:text-stone-100">{a.name}</td>
                                 <td className="px-6 py-4 text-base text-stone-600 dark:text-stone-400">{a.club}</td>
                                 <td className="px-6 py-4 text-base text-stone-600 dark:text-stone-400">{a.requestedBelt}</td>
                                 <td className="px-6 py-4">
-                                  <BadgeMedico estado={a.aptoMedico?.estado} />
-                                  {a.aptoMedico?.nota && <p className="text-xs text-stone-400 italic mt-1">{a.aptoMedico.nota}</p>}
+                                  {hasApto && (
+                                    <div className="mb-1">
+                                      <BadgeMedico estado={a.aptoMedico!.estado} />
+                                      {a.aptoMedico?.nota && <p className="text-xs text-stone-400 italic mt-1">{a.aptoMedico.nota}</p>}
+                                    </div>
+                                  )}
+                                  {hasDispensa && (
+                                    <div className="mt-1">
+                                      <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full border ${a.dispensaMedica!.aprobada ? 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400 border-teal-200 dark:border-teal-700/30' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-700/30'}`}>
+                                        <span className="material-symbols-outlined text-[13px]">{a.dispensaMedica!.aprobada ? 'check_circle' : 'cancel'}</span>
+                                        Dispensa {a.dispensaMedica!.aprobada ? 'Aprobada' : 'Rechazada'}
+                                      </span>
+                                    </div>
+                                  )}
                                 </td>
-                                <td className="px-6 py-4 text-stone-500 dark:text-stone-400 font-mono text-sm">{a.aptoMedico?.fecha || '—'}</td>
+                                <td className="px-6 py-4 text-stone-500 dark:text-stone-400 font-mono text-sm">
+                                  {hasApto ? a.aptoMedico?.fecha : a.dispensaMedica?.fechaSolicitud || '—'}
+                                </td>
                               </tr>
-                            ))}
+                            )})}
                           </tbody>
                         </table>
                       </div>
@@ -328,6 +347,7 @@ export default function MedicoPortal({ aspirantes, convocatorias, onUpdateAspira
                           { label: 'Total dictámenes', val: historial.length, color: 'text-stone-700 dark:text-stone-200' },
                           { label: 'Aptos emitidos', val: historial.filter(a => a.aptoMedico?.estado === 'apto').length, color: 'text-emerald-600' },
                           { label: 'No Aptos emitidos', val: historial.filter(a => a.aptoMedico?.estado === 'no_apto').length, color: 'text-red-600' },
+                          { label: 'Dispensas tramitadas', val: historial.filter(a => a.dispensaMedica?.aprobada !== undefined).length, color: 'text-teal-600' },
                         ].map(s => (
                           <div key={s.label} className="flex justify-between items-center border-b border-stone-50 dark:border-white/5 pb-3 last:border-0 last:pb-0">
                             <span className="text-sm text-stone-500 dark:text-stone-400">{s.label}</span>
