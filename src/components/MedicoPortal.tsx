@@ -47,7 +47,7 @@ export default function MedicoPortal({ aspirantes, convocatorias, onUpdateAspira
   const [selectedDispensa, setSelectedDispensa] = useState<Aspirante | null>(null);
   const [isSavingDispensa, setIsSavingDispensa] = useState(false);
 
-  const candidatos = aspirantes.filter(a => a.status !== 'Borrador');
+  const candidatos = aspirantes;
   const historial = aspirantes.filter(a => 
     (a.aptoMedico && a.aptoMedico.estado !== 'pendiente') ||
     (a.dispensaMedica && a.dispensaMedica.aprobada !== undefined)

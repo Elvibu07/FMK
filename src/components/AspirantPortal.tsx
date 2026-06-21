@@ -322,6 +322,7 @@ export default function AspirantPortal({
           dispensaMedica: {
             solicitada: true,
             motivoDispensa: dispensaMotivo,
+            certificadoAdjunto: dispensaFile,
             fechaSolicitud: new Date().toISOString().split('T')[0],
           }
         });
