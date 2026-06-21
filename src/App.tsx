@@ -147,6 +147,11 @@ export default function App() {
     await api.createAspirante(newAspirante);
   };
 
+  const addJudgeAtomic = async (newJudge: Judge) => {
+    setJudges(prev => [...prev, newJudge]);
+    await api.createJudge(newJudge);
+  };
+
   // ── Dark Mode Effect ──────────────────────────────────────────────────────
   useEffect(() => {
     if (isDarkMode) {
@@ -174,6 +179,9 @@ export default function App() {
         setActiveUserId(profileIdOrEmail || 'REQ-0000');
       }
       setRole(userRole as AppRole);
+    } else if (userRole === 'director') {
+      // Director redirige al portal Admin (mismos permisos)
+      setRole('admin');
     } else if (userRole === 'profesor') {
       setActiveClubName(profileIdOrEmail && profileIdOrEmail.trim().length > 0 ? profileIdOrEmail : 'Club Karate Madrid');
       setRole('profesor');
@@ -412,6 +420,7 @@ export default function App() {
             judges={judges}
             onUpdateJudges={setJudges}
             onUpdateJudgeAtomic={updateJudgeAtomic}
+            onAddJudgeAtomic={addJudgeAtomic}
             convocatorias={convocatorias}
             onUpdateConvocatorias={setConvocatorias}
             onUpdateConvocatoriaAtomic={updateConvocatoriaAtomic}

@@ -18,11 +18,13 @@ interface AdminPortalProps {
   judges?: Judge[];
   onUpdateJudges?: (updated: Judge[]) => void;
   onUpdateJudgeAtomic?: (id: string, updates: Partial<Judge>) => void;
+  onAddJudgeAtomic?: (newJudge: Judge) => void;
   convocatorias: Convocatoria[];
   onUpdateConvocatorias: (updated: Convocatoria[]) => void;
   onUpdateConvocatoriaAtomic?: (id: string, updates: Partial<Convocatoria>) => void;
   onAddConvocatoriaAtomic?: (newConv: Convocatoria) => void;
 }
+
 
 type AdminTab = 'dashboard' | 'kanban' | 'documentos' | 'convocatorias' | 'especiales' | 'estadisticas' | 'configuracion' | 'usuarios' | 'perfil';
 
