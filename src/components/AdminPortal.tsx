@@ -1331,9 +1331,23 @@ export default function AdminPortal({
            ════════════════════════════════════════════════ */}
         {activeTab === 'configuracion' && (
           <div className="flex-1 p-6 lg:p-10 animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-y-auto kanban-scroll bg-[#fafafa] dark:bg-[#0f0f0f]">
-            <div className="mb-10">
-              <h2 className="font-black text-3xl text-stone-800 dark:text-stone-100 tracking-tight">Gestión de Plataforma y Usuarios</h2>
-              <p className="text-sm text-stone-500 dark:text-stone-400 mt-2">Habilita cuentas federativas, gestiona permisos y supervisa la estructura de tribunales.</p>
+            <div className="flex justify-between items-start mb-10">
+              <div>
+                <h2 className="font-black text-3xl text-stone-800 dark:text-stone-100 tracking-tight">Gestión de Plataforma y Usuarios</h2>
+                <p className="text-sm text-stone-500 dark:text-stone-400 mt-2">Habilita cuentas federativas, gestiona permisos y supervisa la estructura de tribunales.</p>
+              </div>
+              <button 
+                onClick={() => {
+                  if (window.confirm('¿Estás seguro de que quieres borrar TODOS los datos de prueba y reiniciar el sistema a cero? Esto eliminará aspirantes, tribunales, convocatorias, etc.')) {
+                    localStorage.clear();
+                    window.location.reload();
+                  }
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 dark:bg-red-900/30 dark:hover:bg-red-900/50 dark:text-red-400 font-bold rounded-lg transition-colors text-sm"
+              >
+                <span className="material-symbols-outlined text-[18px]">delete_forever</span>
+                Reiniciar Datos (Reset)
+              </button>
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
