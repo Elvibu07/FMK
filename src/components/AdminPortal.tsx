@@ -548,6 +548,10 @@ export default function AdminPortal({
            </div>
         </div>
         <div className="flex items-center gap-2">
+            <button onClick={handleInjectTestData} className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-amber-950 font-bold text-[10px] uppercase tracking-widest rounded-md transition-colors shadow-sm flex items-center gap-1">
+              <span className="material-symbols-outlined text-[14px]">database</span>
+              Poblar Datos
+            </button>
           <button onClick={toggleDarkMode} className="text-stone-500 dark:text-stone-400 flex items-center justify-center w-8 h-8 hover:bg-stone-100 dark:hover:bg-white/10 rounded-md transition-all">
             <span className="material-symbols-outlined text-[18px]">dark_mode</span>
           </button>
