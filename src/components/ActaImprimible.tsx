@@ -40,10 +40,8 @@ export default function ActaImprimible({ aspirante, tribunal, convocatoria, juec
             <button onClick={onClose} className="px-3 py-1.5 bg-stone-200 text-stone-700 text-sm font-bold rounded hover:bg-stone-300">
               Cerrar
             </button>
-            </button>
           </div>
         </div>
-
         <div id="acta-imprimible-content" className="p-12 bg-white text-black font-serif">
           {/* Membrete */}
           <div className="text-center border-b-2 border-black pb-6 mb-8">
