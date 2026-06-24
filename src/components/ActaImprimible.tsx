@@ -1,18 +1,29 @@
 import React from 'react';
-import { Aspirante, Tribunal, Convocatoria } from '../types';
+import { Aspirante, Tribunal, Convocatoria, Judge } from '../types';
+import { generateActaPDF } from '../lib/pdfGenerator';
 
 interface ActaImprimibleProps {
   aspirante: Aspirante;
   tribunal?: Tribunal;
   convocatoria?: Convocatoria;
+  jueces: Judge[];
   onClose: () => void;
   onPrint: () => void;
 }
 
-export default function ActaImprimible({ aspirante, tribunal, convocatoria, onClose, onPrint }: ActaImprimibleProps) {
+export default function ActaImprimible({ aspirante, tribunal, convocatoria, jueces, onClose, onPrint }: ActaImprimibleProps) {
   const ev = aspirante.evaluacion;
   const isParcial = ev?.bloqueComun?.resultado === 'Apto' && (ev?.bloqueEspecifico?.resultado === 'No Apto' || ev?.resultadoFinal === 'No Apto');
   const resultadoMostrar = isParcial ? 'NO APTO (Conserva Fase Común)' : ev?.resultadoFinal || 'Pendiente';
+
+  const handleDownloadPDF = () => {
+    if (tribunal && convocatoria) {
+      generateActaPDF(aspirante, tribunal, convocatoria, jueces);
+    } else {
+      // Fallback
+      generateActaPDF(aspirante, tribunal || { id: '', name: 'Tribunal No Asignado', judges: [] }, convocatoria || { id: '', titulo: 'Convocatoria General', status: 'Abierta' } as any, jueces);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4 print:static print:bg-transparent print:p-0 print:block">
@@ -23,11 +34,12 @@ export default function ActaImprimible({ aspirante, tribunal, convocatoria, onCl
             Vista Previa de Acta Oficial
           </h2>
           <div className="flex gap-2">
-            <button onClick={onPrint} className="px-4 py-1.5 bg-blue-700 text-white text-sm font-bold rounded flex items-center gap-1 hover:bg-blue-800">
-              <span className="material-symbols-outlined text-sm">print</span> Imprimir / PDF
+            <button onClick={handleDownloadPDF} className="px-4 py-1.5 bg-blue-700 text-white text-sm font-bold rounded flex items-center gap-1 hover:bg-blue-800">
+              <span className="material-symbols-outlined text-sm">download</span> Descargar PDF Oficial
             </button>
             <button onClick={onClose} className="px-3 py-1.5 bg-stone-200 text-stone-700 text-sm font-bold rounded hover:bg-stone-300">
               Cerrar
+            </button>
             </button>
           </div>
         </div>

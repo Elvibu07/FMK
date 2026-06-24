@@ -1163,6 +1163,7 @@ export default function TribunalsPortal({
           aspirante={showActaModal}
           tribunal={tribunals.find(t => t.id === showActaModal.assignedTribunalId)}
           convocatoria={convocatorias.find(c => c.id === showActaModal.convocatoriaId)}
+          jueces={judges}
           onClose={() => {
             setShowActaModal(null);
           }}
