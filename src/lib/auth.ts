@@ -18,7 +18,7 @@ export async function sendMagicLinkForFirstTime(email: string, name?: string, ro
   const actionCodeSettings = {
     // URL you want to redirect back to. The domain (www.example.com) for this
     // URL must be in the authorized domains list in the Firebase Console.
-    url: window.location.origin + '?type=recovery',
+    url: 'https://fmkelviaheredia.vercel.app?type=recovery',
     handleCodeInApp: true,
   };
 
