@@ -159,11 +159,26 @@ export default function AdminPortal({
   };
 
   React.useEffect(() => {
-    import('../lib/firebase').then(({ auth }) => {
+    import('../lib/firebase').then(({ auth, db }) => {
       const unsubscribe = auth.onAuthStateChanged((user) => {
         if (user) {
           setAvatarUrl(user.photoURL || '');
-          if (user.displayName) setAdminName(user.displayName);
+          if (user.displayName) {
+            setAdminName(user.displayName);
+          } else {
+            import('firebase/firestore').then(({ getDocs, query, collection, where }) => {
+              const q = query(collection(db, 'user_roles'), where('email', '==', user.email?.toLowerCase()));
+              getDocs(q).then(snap => {
+                if (!snap.empty && snap.docs[0].data().name) {
+                  setAdminName(snap.docs[0].data().name);
+                } else if (user.email?.toLowerCase() === 'elvialeonsh@gmail.com') {
+                  setAdminName('Elvia Heredia');
+                } else {
+                  setAdminName(user.email || 'Oficina Central');
+                }
+              });
+            });
+          }
         }
       });
       return () => unsubscribe();
