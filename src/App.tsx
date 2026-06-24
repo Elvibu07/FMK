@@ -71,29 +71,30 @@ export default function App() {
 
         // Check auth session — wrap in its own race with 5s timeout
         try {
-          const authResult = await Promise.race([
-            supabase.auth.getSession(),
+          const checkAuth = new Promise<any>((resolve) => {
+            const { auth } = require('./lib/firebase');
+            const unsubscribe = auth.onAuthStateChanged((user: any) => {
+              unsubscribe();
+              resolve(user);
+            });
+          });
+
+          const user = await Promise.race([
+            checkAuth,
             new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Auth timeout')), 5000))
           ]);
-          const session = (authResult as any)?.data?.session;
-          if (session && session.user.email) {
+          
+          if (user && user.email) {
             if (window.location.href.includes('type=recovery')) {
               setShowPasswordSetup(true);
               window.history.replaceState({}, document.title, window.location.pathname);
             }
             
             const { getUserRoleAndProfile } = await import('./lib/auth');
-            let { role, profileId } = await getUserRoleAndProfile(session.user.email);
+            let { role, profileId } = await getUserRoleAndProfile(user.email);
             
-            const userMetadata = session.user?.user_metadata || {};
-            const metaRole = userMetadata.role;
-            const metaName = userMetadata.full_name;
-            if (!role && metaRole) {
-              role = metaRole;
-            }
-
             if (role) {
-              handleLogin(role, profileId || session.user.email, metaName, aspData, judgeData);
+              handleLogin(role, profileId || user.email, user.displayName || 'Usuario', aspData, judgeData);
             }
           }
         } catch (authErr) {

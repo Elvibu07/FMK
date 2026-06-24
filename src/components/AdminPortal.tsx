@@ -159,19 +159,15 @@ export default function AdminPortal({
   };
 
   React.useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        setAvatarUrl(user.user_metadata?.avatar_url || '');
-        if (user.user_metadata?.full_name) setAdminName(user.user_metadata.full_name);
-      }
+    import('../lib/firebase').then(({ auth }) => {
+      const unsubscribe = auth.onAuthStateChanged((user) => {
+        if (user) {
+          setAvatarUrl(user.photoURL || '');
+          if (user.displayName) setAdminName(user.displayName);
+        }
+      });
+      return () => unsubscribe();
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        setAvatarUrl(session.user.user_metadata?.avatar_url || '');
-        if (session.user.user_metadata?.full_name) setAdminName(session.user.user_metadata.full_name);
-      }
-    });
-    return () => subscription.unsubscribe();
   }, []);
 
   const handleAddUser = (e: React.FormEvent) => {
