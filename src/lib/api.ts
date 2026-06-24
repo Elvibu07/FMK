@@ -1,4 +1,4 @@
-import { collection, addDoc, getDocs, doc, updateDoc, query, where, deleteDoc } from "firebase/firestore";
+import { collection, addDoc, getDocs, doc, updateDoc, query, where, deleteDoc, setDoc } from "firebase/firestore";
 import { db } from "./firebase";
 import { Convocatoria, Tribunal, Aspirante } from "../types";
 
@@ -152,20 +152,66 @@ export async function deleteTribunal(id: string): Promise<boolean> {
   }
 }
 
-export async function fetchJudges(): Promise<Tribunal[]> {
-  const allTribunales = await fetchTribunals();
-  return allTribunales.filter(t => t.rol === 'juez');
+export async function fetchJudges() {
+  try {
+    const querySnapshot = await getDocs(collection(db, "user_roles"));
+    const judges: any[] = [];
+    querySnapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      if (['juez', 'arbitro', 'medico', 'director'].includes(data.rol)) {
+        judges.push({
+          id: docSnap.id,
+          name: data.nombre || data.email || 'Personal',
+          email: data.email,
+          avatarUrl: '',
+          rank: data.rol === 'director' ? 'Director' : data.rol === 'medico' ? 'Médico' : data.rol === 'arbitro' ? 'Árbitro Nacional' : 'Juez Regional',
+          active: true
+        });
+      }
+    });
+    return judges;
+  } catch (e) {
+    console.error("Error obteniendo jueces de Firebase: ", e);
+    return [];
+  }
 }
 
-export async function createJudge(judge: Partial<Tribunal>): Promise<boolean> {
+export async function createJudge(judge: any): Promise<boolean> {
   try {
-    await createTribunal({ ...judge, rol: 'juez' });
+    let rol = 'juez';
+    if (judge.rank === 'Director') rol = 'director';
+    if (judge.rank === 'Médico') rol = 'medico';
+    if (judge.rank?.includes('Árbitro')) rol = 'arbitro';
+
+    await setDoc(doc(db, "user_roles", judge.id || judge.email || Date.now().toString()), {
+      email: judge.email,
+      nombre: judge.name,
+      rol: rol
+    });
     return true;
   } catch (e) {
+    console.error("Error creando juez en Firebase: ", e);
     return false;
   }
 }
 
-export async function updateJudge(id: string, updates: Partial<Tribunal>): Promise<boolean> {
-  return updateTribunal(id, updates);
+export async function updateJudge(id: string, updates: any): Promise<boolean> {
+  try {
+    const dataToUpdate: any = {};
+    if (updates.name) dataToUpdate.nombre = updates.name;
+    if (updates.email) dataToUpdate.email = updates.email;
+    if (updates.rank) {
+        if (updates.rank === 'Director') dataToUpdate.rol = 'director';
+        else if (updates.rank === 'Médico') dataToUpdate.rol = 'medico';
+        else if (updates.rank?.includes('Árbitro')) dataToUpdate.rol = 'arbitro';
+        else dataToUpdate.rol = 'juez';
+    }
+    if (Object.keys(dataToUpdate).length > 0) {
+      await updateDoc(doc(db, "user_roles", id), dataToUpdate);
+    }
+    return true;
+  } catch (e) {
+    console.error("Error actualizando juez en Firebase: ", e);
+    return false;
+  }
 }
