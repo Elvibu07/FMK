@@ -8,9 +8,10 @@ interface ConfiguracionPerfilFederativoProps {
   defaultName?: string;
   defaultEmail?: string;
   onUpdateName?: (newName: string) => void;
+  onUpdateAvatar?: (newUrl: string) => void;
 }
 
-export default function ConfiguracionPerfilFederativo({ roleName, defaultName, defaultEmail, onUpdateName }: ConfiguracionPerfilFederativoProps) {
+export default function ConfiguracionPerfilFederativo({ roleName, defaultName, defaultEmail, onUpdateName, onUpdateAvatar }: ConfiguracionPerfilFederativoProps) {
   const { showToast } = useUI();
   const [name, setName] = useState(defaultName || '');
   const [originalName, setOriginalName] = useState(defaultName || '');
@@ -69,6 +70,11 @@ export default function ConfiguracionPerfilFederativo({ roleName, defaultName, d
           setOriginalName(updateData.full_name);
           if (onUpdateName) {
             onUpdateName(updateData.full_name);
+          }
+        }
+        if (updateData.avatar_url) {
+          if (onUpdateAvatar) {
+            onUpdateAvatar(updateData.avatar_url);
           }
         }
         

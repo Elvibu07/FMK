@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Aspirante, Judge, Tribunal, Convocatoria, Evaluacion, ParteBloqueComun, VotoJuez, ViaExamen } from '../types';
+import { Aspirante, Judge, Tribunal, Convocatoria, Evaluacion, ParteBloqueComun, VotoJuez, ViaExamen, Documento } from '../types';
 import { GRADOS_CONFIG } from '../data';
 import { generateUUID } from '../lib/uuid';
 import ActaImprimible from './ActaImprimible';
 import ConfiguracionPerfilFederativo from './ConfiguracionPerfilFederativo';
 import { useUI } from '../contexts/UIContext';
+import DocViewer from './DocViewer';
 
 interface TribunalsPortalProps {
   judges: Judge[];
@@ -78,6 +79,9 @@ export default function TribunalsPortal({
   const [newTribunalForm, setNewTribunalForm] = useState({ name: '', fecha: '', convocatoriaId: '' });
   const [newJudgeForm, setNewJudgeForm] = useState({ name: '', license: '', rank: 'Juez Regional', federacion: 'Federación Madrileña de Karate', date: '', email: '' });
   const [judgeSearch, setJudgeSearch] = useState('');
+
+  // Doc Viewer State
+  const [viewingDoc, setViewingDoc] = useState<Documento | null>(null);
 
   // ── Aspirantes aptos para examen ─────────────────────────────────────────
   const admitidos = aspirantes.filter(a =>
@@ -238,7 +242,8 @@ export default function TribunalsPortal({
     const totalJueces = ev.votos.length;
     const aptosCount  = ev.votos.filter(v => v.resultado === 'Apto').length;
     const trib = tribunals.find(t => t.id === asp.assignedTribunalId);
-    const requiredVotes = trib?.judges?.length || 1;
+    const juecesEvaluadores = (trib?.judges || judges).filter(j => j.rank.toLowerCase().includes('juez') || j.rank.toLowerCase().includes('evaluador'));
+    const requiredVotes = juecesEvaluadores.length || 1;
 
     let resultadoFinal: 'Apto' | 'No Apto' = 'No Apto';
     if (totalJueces >= requiredVotes) {
@@ -271,7 +276,10 @@ export default function TribunalsPortal({
         if (onUpdateAspiranteAtomic) {
           onUpdateAspiranteAtomic(aspId, { 
             evaluacion: updEval,
-            status: finalAspirante.status
+            status: finalAspirante.status,
+            fechaUltimoExamen: finalAspirante.fechaUltimoExamen,
+            resultadoUltimoExamen: finalAspirante.resultadoUltimoExamen,
+            faseComunAprobadaHasta: finalAspirante.faseComunAprobadaHasta
           });
         } else {
           updateEval(aspId, updEval);
@@ -532,9 +540,9 @@ export default function TribunalsPortal({
                     .map(judge => {
                     const assignedTo = tribunals.find(t => t.judges?.some(j => j.id === judge.id));
                     return (
-                      <div key={judge.id} className="group flex flex-col p-4 bg-white dark:bg-[#151515] hover:bg-stone-50 dark:hover:bg-white/5/80 rounded-2xl border border-stone-200 dark:border-white/20 hover:border-red-200 shadow-sm hover:shadow-md transition-all">
-                        <div className="flex items-center gap-4 mb-3">
-                          <img alt={judge.name} className="w-12 h-12 rounded-full object-cover shadow-sm ring-2 ring-white dark:ring-[#151515]" src={judge.avatarUrl} referrerPolicy="no-referrer" />
+                      <div key={judge.id} className="group flex flex-col p-4 bg-white dark:bg-[#111111] hover:bg-stone-50 dark:hover:bg-white/5 rounded-2xl border border-stone-200 dark:border-white/10 hover:border-red-200 shadow-sm hover:shadow-md transition-all">
+                        <div className="flex items-center gap-4 mb-3 bg-white dark:bg-[#111111]">
+                          <img alt={judge.name} className="w-12 h-12 rounded-full object-cover shadow-sm ring-2 ring-white dark:ring-[#111111]" src={judge.avatarUrl} referrerPolicy="no-referrer" />
                           <div>
                             <p className="font-sans font-black text-stone-800 dark:text-stone-100 leading-tight">{judge.name}</p>
                             <span className={`inline-block font-bold text-[9px] uppercase tracking-wider mt-1 px-2 py-0.5 rounded-md ${
@@ -545,10 +553,10 @@ export default function TribunalsPortal({
                             }`}>{judge.rank}</span>
                           </div>
                         </div>
-                        <div className="flex items-center justify-between bg-stone-50 dark:bg-white/5 p-2 rounded-xl border border-stone-100 dark:border-white/10 group-hover:bg-white dark:bg-[#151515] transition-colors">
+                        <div className="flex items-center justify-between bg-stone-50 dark:bg-white/5 p-2 rounded-xl border border-stone-100 dark:border-white/10 transition-colors">
                           <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider ml-1">Mesa</span>
                           <select
-                            className="font-bold text-xs bg-transparent outline-none text-stone-700 dark:text-stone-200 cursor-pointer"
+                            className="font-bold text-xs bg-transparent outline-none text-stone-700 dark:text-stone-250 cursor-pointer dark:bg-[#111111]"
                             value={assignedTo?.id || ''}
                             onChange={e => {
                               const val = e.target.value;
@@ -556,8 +564,8 @@ export default function TribunalsPortal({
                               else if (val) handleAssignJudge(judge.id, val);
                             }}
                           >
-                            <option value="" className="bg-white dark:bg-[#151515] text-stone-800 dark:text-stone-100">-- Sin Asignar --</option>
-                            {tribunals.map(t => <option key={t.id} value={t.id} className="bg-white dark:bg-[#151515] text-stone-800 dark:text-stone-100">{t.name}</option>)}
+                            <option value="" className="bg-white dark:bg-[#111111] text-stone-850 dark:text-stone-100">-- Sin Asignar --</option>
+                            {tribunals.map(t => <option key={t.id} value={t.id} className="bg-white dark:bg-[#111111] text-stone-850 dark:text-stone-100">{t.name}</option>)}
                           </select>
                         </div>
                       </div>
@@ -698,27 +706,27 @@ export default function TribunalsPortal({
                     <div key={asp.id} className="bg-white dark:bg-[#151515] border border-stone-200 dark:border-white/20 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
                       {/* Header tarjeta */}
                       <div
-                        className="flex flex-col md:flex-row md:items-center justify-between p-5 cursor-pointer hover:bg-stone-50 dark:bg-white/5 transition-colors"
+                        className="flex flex-col md:flex-row md:items-center justify-between p-5 cursor-pointer hover:bg-stone-50 dark:hover:bg-white/5 bg-white dark:bg-[#151515] transition-colors"
                         onClick={() => setSelectedEvalAsp(isExpanded ? null : asp)}
                       >
-                        <div className="flex items-center gap-4">
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 ${isExpanded ? 'bg-red-50 text-red-600 border-red-200' : 'bg-stone-50 dark:bg-white/5 text-stone-400 border-stone-200 dark:border-white/20'}`}>
+                        <div className="flex items-center gap-4 bg-white dark:bg-[#151515]">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 ${isExpanded ? 'bg-red-50 dark:bg-red-950/20 text-red-600 border-red-200 dark:border-red-900/30' : 'bg-stone-50 dark:bg-white/5 text-stone-400 border-stone-200 dark:border-white/20'}`}>
                             <span className="material-symbols-outlined transition-transform duration-300" style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
                               expand_more
                             </span>
                           </div>
                           <div>
                             <h4 className="font-black text-lg text-stone-800 dark:text-stone-100">{asp.name}</h4>
-                            <p className="text-xs text-stone-500 dark:text-stone-400 font-medium">{asp.club} · <strong className="text-red-700">{asp.requestedBelt}</strong> · Vía: <strong>{asp.via || '—'}</strong></p>
+                            <p className="text-xs text-stone-500 dark:text-stone-400 font-medium">{asp.club} · <strong className="text-red-750 dark:text-red-400">{asp.requestedBelt}</strong> · Vía: <strong>{asp.via || '—'}</strong></p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-3 mt-4 md:mt-0">
+                        <div className="flex items-center gap-3 mt-4 md:mt-0 bg-white dark:bg-[#151515]">
                           {tribAsignado && <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400">{tribAsignado.name}</span>}
                           <span className={`text-[10px] font-bold border px-3 py-1 rounded-full uppercase tracking-widest shadow-sm ${
-                            asp.status === 'Apto provisional' ? 'bg-green-50 text-green-700 border-green-200' :
-                            asp.status === 'No Apto provisional' ? 'bg-red-50 text-red-700 border-red-200' :
-                            asp.status === 'Acta emitida' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
-                            'bg-amber-50 text-amber-700 border-amber-200'
+                            asp.status === 'Apto provisional' ? 'bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-900/30' :
+                            asp.status === 'No Apto provisional' ? 'bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-400 border-red-200 dark:border-red-900/30' :
+                            asp.status === 'Acta emitida' ? 'bg-indigo-50 dark:bg-indigo-950/20 text-indigo-700 dark:text-indigo-400 border-indigo-200 dark:border-indigo-900/30' :
+                            'bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-900/30'
                           }`}>
                             {asp.status}
                           </span>
@@ -727,13 +735,13 @@ export default function TribunalsPortal({
 
                       {/* Panel de evaluación (expandible) */}
                       {isExpanded && (
-                        <div className="border-t border-stone-100 dark:border-white/10 p-6 bg-stone-50/50">
+                        <div className="border-t border-stone-100 dark:border-white/10 p-6 bg-stone-50/50 dark:bg-[#111111]/80">
                           {/* Mini-perfil visual */}
                           <div className="flex items-center gap-5 mb-8 bg-white dark:bg-[#151515] p-5 border border-stone-100 dark:border-white/10 rounded-xl shadow-sm">
                             <div className="w-16 h-16 rounded-2xl bg-stone-100 dark:bg-white/10 flex items-center justify-center border border-stone-200 dark:border-white/20 shadow-inner">
                               <span className="material-symbols-outlined text-3xl text-stone-400">person</span>
                             </div>
-                            <div className="flex-1">
+                            <div className="flex-1 bg-white dark:bg-[#151515]">
                               <p className="font-black text-xl text-stone-800 dark:text-stone-100">{asp.name}</p>
                               <div className="flex flex-wrap gap-x-6 gap-y-2 mt-2 text-xs text-stone-500 dark:text-stone-400">
                                 <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">storefront</span> <strong>Club:</strong> {asp.club}</span>
@@ -745,6 +753,29 @@ export default function TribunalsPortal({
                             </div>
                           </div>
 
+                          {/* Expediente Documental del aspirante */}
+                          {(asp.documentos || []).filter(d => d.estado !== 'no_cargado').length > 0 && (
+                            <div className="mb-6 bg-white dark:bg-[#151515] border border-stone-100 dark:border-white/10 rounded-xl p-4 shadow-sm">
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400 mb-2.5 flex items-center gap-1.5">
+                                <span className="material-symbols-outlined text-[14px]">folder_open</span>
+                                Expediente Documental
+                              </p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {(asp.documentos || []).filter(d => d.estado !== 'no_cargado').map(doc => (
+                                  <button
+                                    key={doc.tipo}
+                                    onClick={() => setViewingDoc(doc)}
+                                    className="text-[9px] font-bold px-2.5 py-1.5 bg-stone-50 dark:bg-white/5 border border-stone-200 dark:border-white/20 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-300 transition-colors flex items-center gap-1 text-stone-600 dark:text-stone-300"
+                                    title={doc.nombre || doc.etiqueta}
+                                  >
+                                    <span className="material-symbols-outlined text-[12px] text-red-700">{doc.tipo === 'solicitud_oficial' || doc.nombre?.endsWith('.pdf') ? 'picture_as_pdf' : 'description'}</span>
+                                    {doc.etiqueta}
+                                    <span className={`w-1.5 h-1.5 rounded-full ml-0.5 ${doc.estado === 'aprobado' ? 'bg-green-500' : doc.estado === 'cargado' ? 'bg-blue-400' : 'bg-stone-300'}`} />
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
                             {/* ── Consolidado de Votos de los Jueces ── */}
@@ -1392,6 +1423,9 @@ export default function TribunalsPortal({
           </div>
         </div>
       )}
+
+      {/* ── Visor de Documentos ──────────────────────────── */}
+      <DocViewer documento={viewingDoc} onClose={() => setViewingDoc(null)} />
 
     </div>
   );

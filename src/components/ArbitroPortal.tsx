@@ -117,10 +117,13 @@ export default function ArbitroPortal({
           }
         };
 
-        updateEval(aspId, updatedEv);
-        
         if (onUpdateAspiranteAtomic) {
-          onUpdateAspiranteAtomic(aspId, { status: 'En evaluación' });
+          onUpdateAspiranteAtomic(aspId, { 
+            evaluacion: updatedEv,
+            status: 'En evaluación'
+          });
+        } else {
+          updateEval(aspId, updatedEv);
         }
         
         showAlert('Resultados Enviados', `Los resultados del combate de ${asp.name} han sido registrados.`);

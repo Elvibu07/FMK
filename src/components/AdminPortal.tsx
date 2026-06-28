@@ -3,6 +3,7 @@ import { Aspirante, Tribunal, Convocatoria, EstadoDocumento, EstadoSolicitud, Do
 import ActaImprimible from './ActaImprimible';
 import ConfiguracionPerfilFederativo from './ConfiguracionPerfilFederativo';
 import { useUI } from '../contexts/UIContext';
+import DocViewer from './DocViewer';
 import { supabase } from '../lib/supabase';
 import { createAspirante, createJudge } from '../lib/api';
 import { generateUUID } from '../lib/uuid';
@@ -88,15 +89,20 @@ export default function AdminPortal({
       const api = await import('../lib/api');
       
       const convId = generateUUID();
+      const now = new Date();
+      const plazo = new Date(now);
+      plazo.setDate(plazo.getDate() + 35);
       const newConv = await api.createConvocatoria({
         id: convId,
         titulo: 'Convocatoria Test Mágico',
-        fecha: new Date().toISOString(),
+        fecha: now.toISOString().slice(0, 10),
         sede: 'Dojo Pruebas Central',
         gradesAdmitidos: ['Cinturón Negro', '1º Dan', '2º Dan'],
-        vias: ['Vía Ordinaria', 'Vía Méritos Deportivos'],
+        plazoOrdinario: plazo.toISOString().slice(0, 10),
         estado: 'Abierta',
-        descripcion: 'Generada automáticamente para pruebas.'
+        cupoMaximo: 50,
+        inscritos: 0,
+        observaciones: 'Generada automáticamente para pruebas.'
       });
 
       const tribId = generateUUID();
@@ -165,6 +171,9 @@ export default function AdminPortal({
   const [avatarUrl, setAvatarUrl] = useState<string>('');
   const [adminName, setAdminName] = useState<string>('Oficina Central');
 
+  // Doc Viewer State
+  const [viewingDoc, setViewingDoc] = useState<Documento | null>(null);
+
   interface NotificationItem {
     id: string;
     title: string;
@@ -218,10 +227,24 @@ export default function AdminPortal({
   };
 
   React.useEffect(() => {
+    // 1. Cargar datos del usuario de Supabase (Nombre y Avatar)
+    import('../lib/supabase').then(({ supabase }) => {
+      supabase.auth.getUser().then(({ data: { user } }) => {
+        if (user) {
+          const metaAvatar = user.user_metadata?.avatar_url || '';
+          if (metaAvatar) setAvatarUrl(metaAvatar);
+          
+          const metaName = user.user_metadata?.full_name || '';
+          if (metaName) setAdminName(metaName);
+        }
+      });
+    });
+
+    // 2. Firebase Auth Fallback (si existe)
     import('../lib/firebase').then(({ auth, db }) => {
       const unsubscribe = auth.onAuthStateChanged((user) => {
         if (user) {
-          setAvatarUrl(user.photoURL || '');
+          if (user.photoURL) setAvatarUrl(user.photoURL);
           if (user.displayName) {
             setAdminName(user.displayName);
           } else {
@@ -457,7 +480,7 @@ export default function AdminPortal({
     if (!asp) return;
 
     const newDocs = (asp.documentos || []).map(d =>
-      d.nombre === docName ? { ...d, estado: newState, motivoRechazo: reason } : d
+      d.tipo === docName ? { ...d, estado: newState, motivoRechazo: reason } : d
     );
 
     let newStatus = asp.status;
@@ -627,21 +650,36 @@ export default function AdminPortal({
         <div className="absolute top-0 right-0 w-56 h-56 bg-gradient-to-br from-red-50 to-red-100/50 rounded-full blur-3xl -translate-y-24 translate-x-12 mix-blend-multiply pointer-events-none" />
 
         {/* Brand / Logo Area */}
-        <div className="px-8 mb-10 relative z-10 flex items-center justify-between">
+        <div className="px-8 mb-6 relative z-10 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-red-600 to-red-800 flex items-center justify-center shadow-lg shadow-red-600/30">
               <span className="text-white font-black tracking-tighter text-base">FMK</span>
             </div>
             <div>
-              <h2 className="font-black text-stone-800 dark:text-stone-100 text-lg tracking-wide leading-tight truncate max-w-[140px]" title={adminName}>
-                {adminName}
+              <h2 className="font-black text-stone-800 dark:text-stone-100 text-lg tracking-wide leading-tight">
+                FMK Admin
               </h2>
-              <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">Portal de Administración</p>
+              <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">Oficina Central</p>
             </div>
           </div>
           <button onClick={toggleDarkMode} className="w-10 h-10 rounded-full bg-stone-100 dark:bg-white/10 flex items-center justify-center text-stone-500 dark:text-stone-300 hover:text-stone-800 dark:hover:text-white transition-colors" title="Cambiar Tema">
             <span className="material-symbols-outlined text-[18px]">dark_mode</span>
           </button>
+        </div>
+
+        {/* User Profile Summary (OC Photo Persistency) */}
+        <div className="px-8 mb-8 relative z-10 flex flex-col items-center">
+          <div className="w-20 h-20 rounded-full overflow-hidden mb-3 border-2 border-white shadow-md dark:shadow-none flex items-center justify-center bg-stone-50 dark:bg-white/5">
+            {avatarUrl ? (
+              <img src={avatarUrl} alt={adminName} className="w-full h-full object-cover" />
+            ) : (
+              <span className="material-symbols-outlined text-4xl text-stone-300">account_circle</span>
+            )}
+          </div>
+          <p className="font-black text-sm text-stone-800 dark:text-stone-100 text-center leading-tight">{adminName}</p>
+          <span className="mt-1.5 text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/30 shadow-xs">
+            Administrador OC
+          </span>
         </div>
 
         {/* Navigation Links */}
@@ -1005,6 +1043,7 @@ export default function AdminPortal({
                     <th className="p-3">Aspirante</th>
                     <th className="p-3">Documento</th>
                     <th className="p-3">Estado</th>
+                    <th className="p-3">Vista</th>
                     <th className="p-3 text-right pr-5">Acciones</th>
                   </tr>
                 </thead>
@@ -1014,24 +1053,36 @@ export default function AdminPortal({
                       {(asp.documentos || []).map((doc, i) => (
                         <tr key={`${asp.id}-${doc.tipo}`} className="hover:bg-stone-50 dark:bg-white/5 transition-colors">
                           {i === 0 && (
-                            <td className="p-3 pl-5 font-mono text-xs font-bold align-top border-r border-outline-variant/30" rowSpan={(asp.documentos || []).length}>#{asp.id}</td>
+                            <td className="p-3 pl-5 font-mono text-xs font-bold align-top border-r border-stone-200 dark:border-white/10 bg-white dark:bg-[#151515]" rowSpan={(asp.documentos || []).length}>#{asp.id}</td>
                           )}
                           {i === 0 && (
-                            <td className="p-3 align-top border-r border-outline-variant/30" rowSpan={(asp.documentos || []).length}>
-                              <p className="font-bold text-on-surface">{asp.name}</p>
+                            <td className="p-3 align-top border-r border-stone-200 dark:border-white/10 bg-white dark:bg-[#151515]" rowSpan={(asp.documentos || []).length}>
+                              <p className="font-bold text-stone-850 dark:text-stone-100">{asp.name}</p>
                               <p className="text-xs text-secondary-custom">{asp.club}</p>
-                              <p className="text-[10px] text-primary-container font-bold mt-1">{asp.requestedBelt}</p>
+                              <p className="text-[10px] text-red-700 dark:text-red-400 font-bold mt-1">{asp.requestedBelt}</p>
                             </td>
                           )}
-                          <td className="p-3">
-                            <p className="font-mono text-[11px] font-bold">{doc.etiqueta}</p>
+                          <td className="p-3 bg-white dark:bg-[#151515]">
+                            <p className="font-mono text-[11px] font-bold text-stone-800 dark:text-stone-200">{doc.etiqueta}</p>
                             {doc.nombre && <p className="text-[9px] text-secondary-custom">{doc.nombre}</p>}
                             {doc.motivoRechazo && <p className="text-[9px] text-red-600 mt-0.5">⚠ {doc.motivoRechazo}</p>}
                           </td>
-                          <td className="p-3">
+                          <td className="p-3 bg-white dark:bg-[#151515]">
                             <DocEstadoBadge estado={doc.estado} />
                           </td>
-                          <td className="p-3 text-right pr-5">
+                          <td className="p-3 bg-white dark:bg-[#151515]">
+                            {(doc.estado !== 'no_cargado') && (
+                              <button
+                                onClick={() => setViewingDoc(doc)}
+                                className="text-[9px] px-2 py-1 bg-stone-100 dark:bg-white/10 text-stone-700 dark:text-stone-300 rounded font-bold hover:bg-stone-200 dark:hover:bg-white/20 transition-colors flex items-center gap-0.5 border border-stone-200 dark:border-white/20"
+                                title="Ver documento"
+                              >
+                                <span className="material-symbols-outlined text-[12px]">visibility</span>
+                                Ver
+                              </button>
+                            )}
+                          </td>
+                          <td className="p-3 text-right pr-5 bg-white dark:bg-[#151515]">
                             {(doc.estado === 'cargado' || doc.estado === 'en_revision') ? (
                               <div className="flex gap-1 justify-end">
                                 <button
@@ -1620,6 +1671,7 @@ export default function AdminPortal({
                 roleName="Administrador Central (Oficina Central)" 
                 defaultName={adminName} 
                 onUpdateName={(newName) => setAdminName(newName)}
+                onUpdateAvatar={(newUrl) => setAvatarUrl(newUrl)}
               />
             </div>
           </div>
@@ -1703,16 +1755,31 @@ export default function AdminPortal({
                   <div key={doc.tipo} className="flex items-center justify-between p-2 bg-surface-container rounded border border-outline-variant/20 text-xs">
                     <span className="font-mono text-[#5a403c] font-bold">{doc.etiqueta}</span>
                     <div className="flex items-center gap-1.5">
+                      {(doc.estado !== 'no_cargado') && (
+                        <button onClick={() => setViewingDoc(doc)}
+                          className="text-[9px] px-1.5 py-0.5 bg-stone-100 dark:bg-white/10 text-stone-600 dark:text-stone-300 rounded font-bold hover:bg-stone-200 dark:hover:bg-white/20 border border-stone-200 dark:border-white/20 flex items-center gap-0.5"
+                          title="Ver documento">
+                          <span className="material-symbols-outlined text-[11px]">visibility</span>Ver
+                        </button>
+                      )}
                       <DocEstadoBadge estado={doc.estado} />
-                      {(doc.estado === 'cargado') && (
+                      {((doc.estado === 'cargado' || doc.estado === 'en_revision')) && (
                         <>
                           <button onClick={() => updateDocEstado(selectedAspirante.id, doc.tipo, 'aprobado')}
-                            className="text-[9px] px-1.5 py-0.5 bg-green-600 text-white rounded font-bold hover:bg-green-800">✓</button>
-                          <button onClick={() => {
-                            const m = prompt('Motivo subsanación:');
+                            className="text-[9px] px-1.5 py-0.5 bg-green-600 text-white rounded font-bold hover:bg-green-800"
+                            title="Aprobar documento">✓</button>
+                          <button onClick={async () => {
+                            const m = await showPrompt({ title: 'Motivo subsanación:', confirmText: 'Solicitar' });
                             if (m) updateDocEstado(selectedAspirante.id, doc.tipo, 'requiere_subsanacion', m);
                           }}
-                            className="text-[9px] px-1.5 py-0.5 bg-orange-500 text-white rounded font-bold hover:bg-orange-700">!</button>
+                            className="text-[9px] px-1.5 py-0.5 bg-orange-500 text-white rounded font-bold hover:bg-orange-700"
+                            title="Solicitar subsanación">!</button>
+                          <button onClick={async () => {
+                            const m = await showPrompt({ title: 'Motivo rechazo:', confirmText: 'Rechazar' });
+                            if (m) updateDocEstado(selectedAspirante.id, doc.tipo, 'rechazado', m);
+                          }}
+                            className="text-[9px] px-1.5 py-0.5 bg-red-600 text-white rounded font-bold hover:bg-red-800"
+                            title="Rechazar documento">✗</button>
                         </>
                       )}
                     </div>
@@ -1731,11 +1798,22 @@ export default function AdminPortal({
 
             {/* Evaluación resultado */}
             {selectedAspirante.evaluacion?.resultadoFinal && (
-              <div className={`p-3 rounded-lg border text-sm font-bold ${
-                selectedAspirante.evaluacion.resultadoFinal === 'Apto' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'
-              }`}>
-                Resultado del Tribunal: {selectedAspirante.evaluacion.resultadoFinal}
-                {selectedAspirante.evaluacion.actaEmitida && ' (Acta emitida ✓)'}
+              <div className="space-y-2">
+                <div className={`p-3 rounded-lg border text-sm font-bold ${
+                  selectedAspirante.evaluacion.resultadoFinal === 'Apto' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'
+                }`}>
+                  Resultado del Tribunal: {selectedAspirante.evaluacion.resultadoFinal}
+                  {selectedAspirante.evaluacion.actaEmitida && ' (Acta emitida ✓)'}
+                </div>
+                {selectedAspirante.status === 'Acta emitida' && (
+                  <button
+                    onClick={() => setShowActaModal(true)}
+                    className="w-full py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded font-bold text-xs transition flex items-center justify-center gap-1"
+                  >
+                    <span className="material-symbols-outlined text-sm">picture_as_pdf</span>
+                    Ver Acta Oficial PDF
+                  </button>
+                )}
               </div>
             )}
 
@@ -2027,6 +2105,9 @@ export default function AdminPortal({
           onPrint={() => window.print()}
         />
       )}
+
+      {/* ── Visor de Documentos ────────────────────────────── */}
+      <DocViewer documento={viewingDoc} onClose={() => setViewingDoc(null)} />
     </div>
   );
 }

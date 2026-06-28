@@ -3,6 +3,7 @@ import { Aspirante, Judge, Tribunal, Convocatoria, GradoConfig, ViaExamen, Docum
 import { GRADOS_CONFIG, ESTILOS_RECONOCIDOS } from '../data';
 import { useUI } from '../contexts/UIContext';
 import { supabase } from '../lib/supabase';
+import DocViewer from './DocViewer';
 
 interface AspirantPortalProps {
   aspirante: Aspirante;
@@ -55,6 +56,7 @@ export default function AspirantPortal({
   aspirante,
   onUpdateAspirante,
   onLogout,
+  availableJudges,
   allTribunals,
   convocatorias,
 }: AspirantPortalProps) {
@@ -71,6 +73,9 @@ export default function AspirantPortal({
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadDocTypeSelected, setUploadDocTypeSelected] = useState('');
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success'>('idle');
+
+  // Doc Viewer State
+  const [viewingDoc, setViewingDoc] = useState<Documento | null>(null);
 
   // Profile Edit State
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -149,12 +154,13 @@ export default function AspirantPortal({
 
   // Calculo de validación documental global
   const baseExpected: { tipo: string; etiqueta: string; optional?: boolean }[] = [
+    { tipo: 'solicitud_oficial', etiqueta: 'Solicitud Oficial de Examen' },
     { tipo: 'dni', etiqueta: 'Documento Identidad' },
     { tipo: 'foto', etiqueta: 'Fotografía' },
     { tipo: 'licencia', etiqueta: 'Licencia Federativa' },
     { tipo: 'carnet_grados', etiqueta: 'Carnet de Grados' },
   ];
-  if (gradoConfig.requiereAval) baseExpected.push({ tipo: 'aval', etiqueta: 'Aval del Profesor' });
+  if (gradoConfig.requiereAval) baseExpected.push({ tipo: 'aval_tecnico', etiqueta: 'Aval Técnico' });
   if (gradoConfig.requiereCurriculum) baseExpected.push({ tipo: 'curriculum', etiqueta: 'Currículum Deportivo' });
   if (gradoConfig.requiereTrabajoEscrito) baseExpected.push({ tipo: 'trabajo_escrito', etiqueta: 'Trabajo Escrito' });
   
@@ -180,9 +186,26 @@ export default function AspirantPortal({
   };
   const cuota = calcularCuota();
 
+  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+  const ALLOWED_MIMES = ['application/pdf', 'image/jpeg', 'image/png'];
+  const ALLOWED_EXTS = ['.pdf', '.jpg', '.jpeg', '.png'];
+
   const handleFileUploadConfirm = async () => {
     if (!uploadFileName.trim() || !uploadFile) {
       showToast('Debes ingresar un nombre y seleccionar un archivo.', 'error');
+      return;
+    }
+
+    // Validación de tamaño (RF-25: máx. 5 MB)
+    if (uploadFile.size > MAX_FILE_SIZE) {
+      showToast(`El archivo excede el tamaño máximo permitido (5 MB). Tamaño actual: ${(uploadFile.size / 1024 / 1024).toFixed(1)} MB.`, 'error');
+      return;
+    }
+
+    // Validación de tipo MIME y extensión (RF-25: PDF, JPG, PNG)
+    const ext = '.' + (uploadFile.name.split('.').pop() || '').toLowerCase();
+    if (!ALLOWED_EXTS.includes(ext) || (uploadFile.type && !ALLOWED_MIMES.includes(uploadFile.type))) {
+      showToast('Formato no permitido. Solo se aceptan archivos PDF, JPG o PNG.', 'error');
       return;
     }
     
@@ -230,7 +253,11 @@ export default function AspirantPortal({
         nombre: uploadFileName,
         url: publicUrl,
         estado: 'cargado' as EstadoDocumento,
-        fechaCarga: new Date().toISOString().split('T')[0]
+        fechaCarga: new Date().toISOString().split('T')[0],
+        fileSize: uploadFile.size < 1024 * 1024
+          ? `${(uploadFile.size / 1024).toFixed(0)} KB`
+          : `${(uploadFile.size / 1024 / 1024).toFixed(1)} MB`,
+        version: (updated.documentos[docIndex].version || 0) + 1,
       };
     } else {
       updated.documentos.push({
@@ -912,6 +939,7 @@ export default function AspirantPortal({
                 if (!validPermanencia) { showToast('No puedes enviar la solicitud: No cumples la permanencia mínima.', 'error'); return; }
                 if (!validLicencias) { showToast('No puedes enviar la solicitud: No tienes las licencias requeridas.', 'error'); return; }
                 if (docMissing) { showToast('No puedes enviar la solicitud: Faltan documentos obligatorios o hay documentos por subsanar.', 'error'); return; }
+                if (!validPago) { showToast('No puedes enviar la solicitud: El pago de la cuota de examen no ha sido registrado ni se ha validado exención.', 'error'); return; }
                 
                 showConfirm(
                   'Enviar Solicitud',
@@ -1335,15 +1363,15 @@ export default function AspirantPortal({
               <div className="space-y-2">
                 {(() => {
                   const baseExpected = [
-                    { tipo: 'solicitud', etiqueta: 'Solicitud Oficial de Examen' },
+                    { tipo: 'solicitud_oficial', etiqueta: 'Solicitud Oficial de Examen' },
                     { tipo: 'licencia', etiqueta: 'Licencia Federativa (año en curso)' },
                     { tipo: 'dni', etiqueta: 'Copia del DNI' },
                     { tipo: 'foto', etiqueta: 'Fotografías Tamaño Carnet' },
                     { tipo: 'carnet_grados', etiqueta: 'Carnet de Grados con Firmas' },
                   ];
                   
-                  if (edad !== null && edad < 18) baseExpected.push({ tipo: 'autorizacion', etiqueta: 'Autorización Paterna/Materna' });
-                  if (gradoConfig.requiereAval) baseExpected.push({ tipo: 'aval', etiqueta: 'Aval Técnico' });
+                  if (edad !== null && edad < 18) baseExpected.push({ tipo: 'autorizacion_dispensa', etiqueta: 'Autorización Paterna/Materna' });
+                  if (gradoConfig.requiereAval) baseExpected.push({ tipo: 'aval_tecnico', etiqueta: 'Aval Técnico' });
                   if (gradoConfig.requiereCurriculum) baseExpected.push({ tipo: 'curriculum', etiqueta: 'Currículum Deportivo' });
                   if (gradoConfig.requiereTrabajoEscrito) baseExpected.push({ tipo: 'trabajo_escrito', etiqueta: 'Trabajo Escrito Técnico' });
                   if (aspirante.via === 'Campeonatos') baseExpected.push({ tipo: 'acta_deportiva', etiqueta: 'Acta Deportiva Oficial' });
@@ -1388,7 +1416,7 @@ export default function AspirantPortal({
                         {(doc.estado === 'cargado' || doc.estado === 'aprobado') ? (
                           <>
                             <button
-                              onClick={() => alert(`Simulación: Abriendo visualizador para "${doc.nombre}"...`)}
+                              onClick={() => setViewingDoc(doc)}
                               className="text-[10px] font-bold px-3 py-1.5 bg-stone-50 dark:bg-white/5 text-red-700 border border-stone-200 dark:border-white/20 rounded hover:bg-red-50 transition flex items-center gap-1"
                               title="Mirar documento"
                             >
@@ -1724,7 +1752,33 @@ export default function AspirantPortal({
                       {aspirante.status.includes('No Apto') ? 'NO APTO' : 'APTO'}
                     </p>
                     {aspirante.status === 'Acta emitida' ? (
-                      <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">El resultado es definitivo. Acta oficial emitida por la Federación.</p>
+                      <div className="mt-4 flex flex-wrap gap-2.5">
+                        <button
+                          onClick={async () => {
+                            const { generateActaPDF } = await import('../lib/pdfGenerator');
+                            const trib = allTribunals.find(t => t.id === aspirante.assignedTribunalId) || { id: '', name: 'Tribunal Oficial de Grados', isMain: false, judges: [] };
+                            const conv = convocatorias.find(c => c.id === aspirante.convocatoriaId) || { id: '', titulo: 'Convocatoria General', fecha: new Date().toISOString() };
+                            generateActaPDF(aspirante, trib as any, conv as any, availableJudges || []);
+                          }}
+                          className="px-4 py-2 bg-blue-700 text-white rounded-lg font-bold text-xs hover:bg-blue-800 transition-colors flex items-center gap-1.5 shadow-sm"
+                        >
+                          <span className="material-symbols-outlined text-[14px]">download</span>
+                          Descargar Acta Oficial
+                        </button>
+
+                        {aspirante.evaluacion?.resultadoFinal === 'Apto' && (
+                          <button
+                            onClick={async () => {
+                              const { generateDiplomaPDF } = await import('../lib/pdfGenerator');
+                              generateDiplomaPDF(aspirante);
+                            }}
+                            className="px-4 py-2 bg-amber-600 text-white rounded-lg font-bold text-xs hover:bg-amber-700 transition-colors flex items-center gap-1.5 shadow-sm"
+                          >
+                            <span className="material-symbols-outlined text-[14px]">workspace_premium</span>
+                            Descargar Diploma
+                          </button>
+                        )}
+                      </div>
                     ) : (
                       <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">Resultado provisional. Se confirma con la emisión del acta oficial.</p>
                     )}
@@ -1896,6 +1950,9 @@ export default function AspirantPortal({
         </div>
       )}
 
+      {/* ── Visor de Documentos ────────────────────────────────────────── */}
+      <DocViewer documento={viewingDoc} onClose={() => setViewingDoc(null)} />
+
       {/* ── Modal de Subida de Documentos ────────────────────────────────── */}
       {uploadModalOpen && (
         <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
@@ -1946,6 +2003,7 @@ export default function AspirantPortal({
                         className="w-full border border-outline-variant rounded-lg p-2.5 text-sm focus:border-red-700 focus:ring-1 focus:ring-primary-container outline-none bg-surface-container-low dark:bg-white/5"
                       >
                         <option value="">Selecciona el tipo de documento...</option>
+                        <option value="solicitud_oficial">Solicitud Oficial de Examen</option>
                         <option value="dni">DNI / NIE / Pasaporte</option>
                         <option value="foto">Fotografía Carnet</option>
                         <option value="licencia">Licencia Federativa Actual</option>
@@ -1953,6 +2011,9 @@ export default function AspirantPortal({
                         <option value="aval_tecnico">Aval Técnico</option>
                         <option value="curriculum">Currículum Deportivo</option>
                         <option value="trabajo_escrito">Trabajo Escrito (Tribunal)</option>
+                        <option value="certificado_medico">Certificado Médico</option>
+                        <option value="acta_deportiva">Acta Deportiva Oficial</option>
+                        <option value="autorizacion_dispensa">Autorización / Dispensa</option>
                         <option value="justificante_pago">Justificante de Pago</option>
                       </select>
                     </div>

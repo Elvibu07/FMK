@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import { Aspirante, Tribunal, Convocatoria, Judge } from '../types';
 import { UserOptions } from 'jspdf-autotable';
 
@@ -103,7 +103,7 @@ export const generateActaPDF = (
     });
   }
 
-  doc.autoTable({
+  autoTable(doc, {
     startY: startY + 25,
     head: [['Miembro del Tribunal', 'Bloque Común', 'Bloque Específico', 'Voto Final']],
     body: tableData,
@@ -112,9 +112,29 @@ export const generateActaPDF = (
     margin: { left: 14, right: 14 },
     theme: 'grid'
   });
+ 
+  // Reporte Tatami (Kumite) details if present
+  let currentY = (doc as any).lastAutoTable.finalY + 10;
+  if (aspirante.via === 'Kumite' && evaluacion?.bloqueEspecifico?.kumiteDetalles) {
+    const k = evaluacion.bloqueEspecifico.kumiteDetalles;
+    doc.setFillColor(245, 247, 250);
+    doc.rect(14, currentY, 182, 18, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(139, 0, 0);
+    doc.text('REPORTE DEL ÁRBITRO AUXILIAR (TATAMI):', 18, currentY + 5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(40, 40, 40);
+    
+    const detailsLine1 = `Resultado: ${k.resultadoCombate || '—'}  |  Puntos AKA: ${k.puntosAka !== undefined ? k.puntosAka : '—'}  |  Puntos AO: ${k.puntosAo !== undefined ? k.puntosAo : '—'}`;
+    const detailsLine2 = `Modalidad: ${k.modalidad || '—'}  |  Encuentros: ${k.encuentros || '—'}  |  Protecciones WKF: ${k.proteccionesWKF ? 'Sí' : 'No'}`;
+    doc.text(detailsLine1, 18, currentY + 10);
+    doc.text(detailsLine2, 18, currentY + 15);
+    currentY += 24;
+  }
 
   // Final Result Box
-  const finalY = doc.lastAutoTable.finalY + 15;
+  const finalY = currentY + 5;
   const isApto = evaluacion?.resultadoFinal === 'Apto';
   
   doc.setFillColor(isApto ? 230 : 255, isApto ? 245 : 230, isApto ? 230 : 230);

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Aspirante, Convocatoria } from '../types';
+import { Aspirante, Convocatoria, Documento } from '../types';
 import { useUI } from '../contexts/UIContext';
 import ConfiguracionPerfilFederativo from './ConfiguracionPerfilFederativo';
 import { supabase } from '../lib/supabase';
+import DocViewer from './DocViewer';
 
 interface MedicoPortalProps {
   aspirantes: Aspirante[];
@@ -71,6 +72,9 @@ export default function MedicoPortal({ aspirantes, convocatorias, onUpdateAspira
   const [isSaving, setIsSaving] = useState(false);
   const [selectedDispensa, setSelectedDispensa] = useState<Aspirante | null>(null);
   const [isSavingDispensa, setIsSavingDispensa] = useState(false);
+
+  // Doc Viewer State
+  const [viewingDoc, setViewingDoc] = useState<Documento | null>(null);
 
   const candidatos = aspirantes;
   const historial = aspirantes.filter(a => 
@@ -460,9 +464,9 @@ export default function MedicoPortal({ aspirantes, convocatorias, onUpdateAspira
                                   <p className="text-sm text-stone-600 dark:text-stone-400 flex items-center gap-1.5">
                                     <span className="font-bold">Certificado Adjunto:</span>
                                     <span className="material-symbols-outlined text-[16px] text-red-700">description</span>
-                                    <a href="#" onClick={(e) => { e.preventDefault(); window.open(d.certificadoAdjunto, '_blank'); }} className="text-blue-600 hover:underline" title="Ver Certificado Original">
+                                    <button onClick={(e) => { e.preventDefault(); setViewingDoc({ tipo: 'certificado_medico', etiqueta: 'Certificado Médico', nombre: 'Certificado_Medico.pdf', estado: 'cargado', url: d.certificadoAdjunto }); }} className="text-blue-600 hover:underline font-bold" title="Ver Certificado Original">
                                       Ver Documento
-                                    </a>
+                                    </button>
                                   </p>
                                 )}
                                 {d.parteExamenExenta && <p className="text-sm text-stone-600 dark:text-stone-400"><span className="font-bold">Exento de:</span> {d.parteExamenExenta}</p>}
@@ -594,6 +598,9 @@ export default function MedicoPortal({ aspirantes, convocatorias, onUpdateAspira
           </div>
         </div>
       )}
+
+      {/* ── Visor de Documentos ──────────────────────────── */}
+      <DocViewer documento={viewingDoc} onClose={() => setViewingDoc(null)} />
     </div>
   );
 }

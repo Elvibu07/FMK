@@ -17,11 +17,16 @@ export default function ActaImprimible({ aspirante, tribunal, convocatoria, juec
   const resultadoMostrar = isParcial ? 'NO APTO (Conserva Fase Común)' : ev?.resultadoFinal || 'Pendiente';
 
   const handleDownloadPDF = () => {
-    if (tribunal && convocatoria) {
-      generateActaPDF(aspirante, tribunal, convocatoria, jueces);
-    } else {
-      // Fallback
-      generateActaPDF(aspirante, tribunal || { id: '', name: 'Tribunal No Asignado', judges: [] } as any, convocatoria || { id: '', titulo: 'Convocatoria General', status: 'Abierta' } as any, jueces);
+    try {
+      if (tribunal && convocatoria) {
+        generateActaPDF(aspirante, tribunal, convocatoria, jueces);
+      } else {
+        // Fallback
+        generateActaPDF(aspirante, tribunal || { id: '', name: 'Tribunal No Asignado', isMain: false, judges: [] } as any, convocatoria || { id: '', titulo: 'Convocatoria General', status: 'Abierta' } as any, jueces);
+      }
+    } catch (err) {
+      console.error("Error al generar PDF del acta:", err);
+      alert("Error al generar PDF: " + (err as Error).message);
     }
   };
 
@@ -34,6 +39,9 @@ export default function ActaImprimible({ aspirante, tribunal, convocatoria, juec
             Vista Previa de Acta Oficial
           </h2>
           <div className="flex gap-2">
+            <button onClick={() => window.print()} className="px-4 py-1.5 bg-stone-800 text-white text-sm font-bold rounded flex items-center gap-1 hover:bg-stone-900">
+              <span className="material-symbols-outlined text-sm">print</span> Imprimir
+            </button>
             <button onClick={handleDownloadPDF} className="px-4 py-1.5 bg-blue-700 text-white text-sm font-bold rounded flex items-center gap-1 hover:bg-blue-800">
               <span className="material-symbols-outlined text-sm">download</span> Descargar PDF Oficial
             </button>
@@ -69,6 +77,19 @@ export default function ActaImprimible({ aspirante, tribunal, convocatoria, juec
               <div><span className="font-bold">Club / Dojo:</span> {aspirante.club}</div>
               <div><span className="font-bold">Vía de Examen:</span> {aspirante.via || 'Ordinaria'}</div>
             </div>
+            {aspirante.via === 'Kumite' && ev?.bloqueEspecifico?.kumiteDetalles && (
+              <div className="mt-4 pt-3 border-t border-dashed border-stone-300">
+                <span className="font-bold text-xs uppercase block mb-1.5 text-indigo-700">Reporte del Árbitro Auxiliar (Tatami)</span>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                  <div><span className="font-semibold">Resultado Combate:</span> {ev.bloqueEspecifico.kumiteDetalles.resultadoCombate || '—'}</div>
+                  <div><span className="font-semibold">Puntos AKA:</span> {ev.bloqueEspecifico.kumiteDetalles.puntosAka !== undefined ? ev.bloqueEspecifico.kumiteDetalles.puntosAka : '—'}</div>
+                  <div><span className="font-semibold">Puntos AO:</span> {ev.bloqueEspecifico.kumiteDetalles.puntosAo !== undefined ? ev.bloqueEspecifico.kumiteDetalles.puntosAo : '—'}</div>
+                  <div><span className="font-semibold">Protecciones WKF:</span> {ev.bloqueEspecifico.kumiteDetalles.proteccionesWKF ? 'Sí' : 'No'}</div>
+                  <div className="col-span-2"><span className="font-semibold">Modalidad:</span> {ev.bloqueEspecifico.kumiteDetalles.modalidad || '—'}</div>
+                  <div className="col-span-2"><span className="font-semibold">Encuentros:</span> {ev.bloqueEspecifico.kumiteDetalles.encuentros || '—'}</div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Resultado */}
