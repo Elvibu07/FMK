@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Aspirante, Convocatoria, Documento } from '../types';
 import { useUI } from '../contexts/UIContext';
 import ConfiguracionPerfilFederativo from './ConfiguracionPerfilFederativo';
-import { supabase } from '../lib/supabase';
+import { auth } from '../lib/firebase';
 import DocViewer from './DocViewer';
 
 interface MedicoPortalProps {
@@ -44,25 +44,24 @@ export default function MedicoPortal({ aspirantes, convocatorias, onUpdateAspira
   const [medicoName, setMedicoName] = useState<string>('Bob Toronja');
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    const user = auth.currentUser;
+    if (user) {
+      if (user.displayName) {
+        setMedicoName(user.displayName);
+      } else if (user.email === 'paginasusar@gmail.com') {
+        setMedicoName('Bob Toronja');
+      }
+    }
+    const unsubscribe = auth.onAuthStateChanged((user) => {
       if (user) {
-        if (user.user_metadata?.full_name) {
-          setMedicoName(user.user_metadata.full_name);
+        if (user.displayName) {
+          setMedicoName(user.displayName);
         } else if (user.email === 'paginasusar@gmail.com') {
           setMedicoName('Bob Toronja');
         }
       }
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        if (session.user.user_metadata?.full_name) {
-          setMedicoName(session.user.user_metadata.full_name);
-        } else if (session.user.email === 'paginasusar@gmail.com') {
-          setMedicoName('Bob Toronja');
-        }
-      }
-    });
-    return () => subscription.unsubscribe();
+    return () => unsubscribe();
   }, []);
 
   const [search, setSearch] = useState('');
