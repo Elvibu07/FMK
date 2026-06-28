@@ -24,11 +24,29 @@ export async function checkAndApplyMagicLink() {
 }
 
 export async function signInWithPassword(email: string, password: string) {
+  // 1. Intentar iniciar sesión en Supabase
+  try {
+    const { supabase } = await import("./supabase");
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (!error && data?.user) {
+      console.log("✅ Inicio de sesión exitoso en Supabase:", data.user.email);
+      return {
+        uid: data.user.id,
+        email: data.user.email,
+        displayName: data.user.user_metadata?.full_name || '',
+        photoURL: data.user.user_metadata?.avatar_url || ''
+      };
+    }
+  } catch (supabaseError) {
+    console.warn("⚠️ Fallo en inicio de sesión de Supabase, intentando Firebase...", supabaseError);
+  }
+
+  // 2. Fallback: Intentar iniciar sesión en Firebase
   try {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
     return userCredential.user;
   } catch (error: any) {
-    console.error('Error al iniciar sesión:', error.message);
+    console.error('Error al iniciar sesión en Firebase:', error.message);
     throw error;
   }
 }

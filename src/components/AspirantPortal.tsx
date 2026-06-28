@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Aspirante, Judge, Tribunal, Convocatoria, GradoConfig, ViaExamen, Documento, EstadoDocumento } from '../types';
 import { GRADOS_CONFIG, ESTILOS_RECONOCIDOS } from '../data';
 import { useUI } from '../contexts/UIContext';
-import { supabase } from '../lib/supabase';
 import DocViewer from './DocViewer';
 
 interface AspirantPortalProps {
@@ -220,79 +219,78 @@ export default function AspirantPortal({
 
     setUploadStatus('uploading');
 
-    // 1. Upload to Supabase
-    const fileExt = uploadFile.name.split('.').pop();
-    const filePath = `${aspirante.id}/${tipo}-${Date.now()}.${fileExt}`;
+    try {
+      const { storage } = await import('../lib/firebase');
+      const { ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
+      
+      const fileExt = uploadFile.name.split('.').pop();
+      const filePath = `aspirantes/${aspirante.id}/${tipo}-${Date.now()}.${fileExt}`;
+      const storageRef = ref(storage, filePath);
 
-    const { error: uploadError } = await supabase.storage
-      .from('fmk_archivos')
-      .upload(filePath, uploadFile);
+      // Subir a Firebase Storage
+      const uploadResult = await uploadBytes(storageRef, uploadFile);
+      const publicUrl = await getDownloadURL(uploadResult.ref);
 
-    if (uploadError) {
-      console.error('Error uploading:', uploadError);
-      showToast('Error al subir el archivo a Supabase.', 'error');
+      // Update Aspirante
+      const updated = { ...aspirante };
+
+      if (!updated.documentos) {
+        updated.documentos = [];
+      }
+      
+      const docIndex = updated.documentos.findIndex(d => d.tipo === tipo);
+      if (docIndex >= 0) {
+        updated.documentos[docIndex] = {
+          ...updated.documentos[docIndex],
+          nombre: uploadFileName,
+          url: publicUrl,
+          estado: 'cargado' as EstadoDocumento,
+          fechaCarga: new Date().toISOString().split('T')[0],
+          fileSize: uploadFile.size < 1024 * 1024
+            ? `${(uploadFile.size / 1024).toFixed(0)} KB`
+            : `${(uploadFile.size / 1024 / 1024).toFixed(1)} MB`,
+          version: (updated.documentos[docIndex].version || 0) + 1,
+        };
+      } else {
+        updated.documentos.push({
+          tipo: tipo,
+          etiqueta: tipo.replace('_', ' ').toUpperCase(),
+          estado: 'cargado' as EstadoDocumento,
+          nombre: uploadFileName,
+          url: publicUrl,
+          fechaCarga: new Date().toISOString().split('T')[0]
+        });
+      }
+
+      if (tipo === 'dni' && updated.documents) updated.documents.dni = { name: uploadFileName, uploaded: true, fileSize: '1.4 MB' };
+      if (tipo === 'foto' && updated.documents) updated.documents.photo = { name: uploadFileName, uploaded: true, fileSize: '700 KB' };
+      if (tipo === 'licencia' && updated.documents) updated.documents.license = { name: uploadFileName, uploaded: true, fileSize: '2.2 MB' };
+
+      if (updated.status === 'Subsanación') {
+        updated.status = 'Pendiente';
+        updated.correctionReason = undefined;
+      }
+
+      const allLoaded = updated.documentos?.every(d => d.estado !== 'no_cargado') ?? false;
+      if (allLoaded && updated.progressStep < 3 && updated.paymentStatus === 'Unpaid') {
+        updated.progressStep = 3;
+      }
+
+      onUpdateAspirante(updated);
+      setUploadStatus('success');
+      
+      setTimeout(() => {
+        setUploadModalOpen(false);
+        setUploadStatus('idle');
+        setUploadFileName('');
+        setUploadFile(null);
+      }, 1500);
+
+    } catch (e: any) {
+      console.error('Error uploading:', e);
+      showToast('Error al subir el archivo a Firebase Storage: ' + e.message, 'error');
       setUploadStatus('idle');
-      return;
     }
-
-    const { data: { publicUrl } } = supabase.storage
-      .from('fmk_archivos')
-      .getPublicUrl(filePath);
-
-    // 2. Update Aspirante
-    const updated = { ...aspirante };
-
-    if (!updated.documentos) {
-      updated.documentos = [];
-    }
-    
-    const docIndex = updated.documentos.findIndex(d => d.tipo === tipo);
-    if (docIndex >= 0) {
-      updated.documentos[docIndex] = {
-        ...updated.documentos[docIndex],
-        nombre: uploadFileName,
-        url: publicUrl,
-        estado: 'cargado' as EstadoDocumento,
-        fechaCarga: new Date().toISOString().split('T')[0],
-        fileSize: uploadFile.size < 1024 * 1024
-          ? `${(uploadFile.size / 1024).toFixed(0)} KB`
-          : `${(uploadFile.size / 1024 / 1024).toFixed(1)} MB`,
-        version: (updated.documentos[docIndex].version || 0) + 1,
-      };
-    } else {
-      updated.documentos.push({
-        tipo: tipo,
-        etiqueta: tipo.replace('_', ' ').toUpperCase(),
-        estado: 'cargado' as EstadoDocumento,
-        nombre: uploadFileName,
-        url: publicUrl,
-        fechaCarga: new Date().toISOString().split('T')[0]
-      });
-    }
-
-    if (tipo === 'dni' && updated.documents) updated.documents.dni = { name: uploadFileName, uploaded: true, fileSize: '1.4 MB' };
-    if (tipo === 'foto' && updated.documents) updated.documents.photo = { name: uploadFileName, uploaded: true, fileSize: '700 KB' };
-    if (tipo === 'licencia' && updated.documents) updated.documents.license = { name: uploadFileName, uploaded: true, fileSize: '2.2 MB' };
-
-    if (updated.status === 'Subsanación') {
-      updated.status = 'Pendiente';
-      updated.correctionReason = undefined;
-    }
-
-    const allLoaded = updated.documentos?.every(d => d.estado !== 'no_cargado') ?? false;
-    if (allLoaded && updated.progressStep < 3 && updated.paymentStatus === 'Unpaid') {
-      updated.progressStep = 3;
-    }
-
-    onUpdateAspirante(updated);
-    setUploadStatus('success');
-    
-    setTimeout(() => {
-      setUploadModalOpen(false);
-      setUploadStatus('idle');
-      setUploadFileName('');
-      setUploadFile(null);
-    }, 1500);
   };
 
   const handleFileDelete = (tipo: string) => {
@@ -307,7 +305,7 @@ export default function AspirantPortal({
           // Si es un documento base, lo vaciamos pero lo dejamos en la lista para que salga "Subir"
           updated.documentos = updated.documentos.map(d =>
             d.tipo === tipo
-              ? { ...d, estado: 'no_cargado' as EstadoDocumento, nombre: '', fechaCarga: '', fileSize: '' }
+              ? { ...d, estado: 'no_cargado' as EstadoDocumento, nombre: '', url: '', fechaCarga: '', fileSize: '' }
               : d
           );
         } else {
@@ -332,7 +330,7 @@ export default function AspirantPortal({
       if (updated.documentos) {
         updated.documentos = updated.documentos.map(d =>
           d.tipo === 'justificante_pago'
-            ? { ...d, nombre: 'Justificante_pago_online.pdf', estado: 'cargado' as EstadoDocumento }
+            ? { ...d, nombre: 'Justificante_pago_online.pdf', url: '', estado: 'cargado' as EstadoDocumento }
             : d
         );
       }
@@ -362,38 +360,36 @@ export default function AspirantPortal({
       'Solicitar Dispensa Médica',
       `¿Confirmar envío de solicitud de dispensa médica a la Federación? Motivo: ${dispensaMotivo}`,
       async () => {
-        // Upload to Supabase
-        const fileExt = dispensaFileObj.name.split('.').pop();
-        const filePath = `${aspirante.id}/dispensa-${Date.now()}.${fileExt}`;
+        try {
+          const { storage } = await import('../lib/firebase');
+          const { ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
+          
+          const fileExt = dispensaFileObj.name.split('.').pop();
+          const filePath = `dispensas/${aspirante.id}-${Date.now()}.${fileExt}`;
+          const storageRef = ref(storage, filePath);
 
-        const { error: uploadError } = await supabase.storage
-          .from('fmk_archivos')
-          .upload(filePath, dispensaFileObj);
+          // Subir a Firebase Storage
+          const uploadResult = await uploadBytes(storageRef, dispensaFileObj);
+          const publicUrl = await getDownloadURL(uploadResult.ref);
 
-        if (uploadError) {
-          console.error('Error uploading dispensa:', uploadError);
-          showToast('Error al subir el certificado a Supabase.', 'error');
-          return;
+          onUpdateAspirante({
+            ...aspirante,
+            dispensaMedica: {
+              solicitada: true,
+              motivoDispensa: dispensaMotivo,
+              certificadoAdjunto: publicUrl,
+              fechaSolicitud: new Date().toISOString().split('T')[0],
+            }
+          });
+          setShowDispensaModal(false);
+          setDispensaFile('');
+          setDispensaFileObj(null);
+          setDispensaMotivo('');
+          showAlert('Dispensa Solicitada', 'Solicitud de dispensa médica y certificado enviados a la Federación.');
+        } catch (e: any) {
+          console.error('Error uploading dispensa:', e);
+          showToast('Error al subir el certificado a Firebase Storage: ' + e.message, 'error');
         }
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('fmk_archivos')
-          .getPublicUrl(filePath);
-
-        onUpdateAspirante({
-          ...aspirante,
-          dispensaMedica: {
-            solicitada: true,
-            motivoDispensa: dispensaMotivo,
-            certificadoAdjunto: publicUrl,
-            fechaSolicitud: new Date().toISOString().split('T')[0],
-          }
-        });
-        setShowDispensaModal(false);
-        setDispensaFile('');
-        setDispensaFileObj(null);
-        setDispensaMotivo('');
-        showAlert('Dispensa Solicitada', 'Solicitud de dispensa médica y certificado enviados a la Federación.');
       },
       'Solicitar Dispensa'
     );

@@ -62,7 +62,7 @@ export default function App() {
   const [convocatorias, setConvocatorias] = useState<Convocatoria[]>([]);
   const [judges, setJudges] = useState<Judge[]>([]);
 
-  // ── Fetch from Supabase ───────────────────────────────────────────────────
+  // ── Fetch from Firebase ───────────────────────────────────────────────────
   useEffect(() => {
     let didFinish = false;
     

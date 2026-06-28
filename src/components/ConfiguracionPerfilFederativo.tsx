@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useUI } from '../contexts/UIContext';
 import { updatePassword } from '../lib/auth';
-import { supabase } from '../lib/supabase';
+import { auth, storage } from '../lib/firebase';
+import { updateProfile } from 'firebase/auth';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 interface ConfiguracionPerfilFederativoProps {
   roleName: string;
@@ -22,62 +24,58 @@ export default function ConfiguracionPerfilFederativo({ roleName, defaultName, d
   const [pendingAvatarFile, setPendingAvatarFile] = useState<File | null>(null);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        const fetchedName = user.user_metadata?.full_name || defaultName || '';
-        setName(fetchedName);
-        setOriginalName(fetchedName);
-        setActualEmail(user.email || defaultEmail || '');
-        const fetchedAvatar = user.user_metadata?.avatar_url || '';
-        setAvatarUrl(fetchedAvatar);
-      }
-    });
+    const user = auth.currentUser;
+    if (user) {
+      const fetchedName = user.displayName || defaultName || '';
+      setName(fetchedName);
+      setOriginalName(fetchedName);
+      setActualEmail(user.email || defaultEmail || '');
+      setAvatarUrl(user.photoURL || '');
+    }
   }, [defaultName, defaultEmail]);
 
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const updateData: any = {};
-      
+      const user = auth.currentUser;
+      if (!user) throw new Error('No hay sesión de usuario activa en Firebase.');
+
+      let newPhotoUrl = user.photoURL || '';
+      let hasProfileChanges = false;
+      const profileUpdates: any = {};
+
       if (name.trim() !== originalName.trim() && name.trim().length > 0) {
-        updateData.full_name = name.trim();
+        profileUpdates.displayName = name.trim();
+        hasProfileChanges = true;
       }
-      
+
       if (pendingAvatarFile) {
         const fileExt = pendingAvatarFile.name.split('.').pop();
-        const { data: { user } } = await supabase.auth.getUser();
-        const filePath = `avatars/${user?.id || 'unknown'}-${Date.now()}.${fileExt}`;
+        const filePath = `avatars/${user.uid}-${Date.now()}.${fileExt}`;
+        const storageRef = ref(storage, filePath);
         
-        const { error: uploadError } = await supabase.storage
-          .from('fmk_archivos')
-          .upload(filePath, pendingAvatarFile, { upsert: true });
-          
-        if (uploadError) throw new Error('Error al subir la imagen: ' + uploadError.message);
-        
-        const { data: { publicUrl } } = supabase.storage
-          .from('fmk_archivos')
-          .getPublicUrl(filePath);
-          
-        updateData.avatar_url = publicUrl;
+        // Subir a Firebase Storage
+        const uploadResult = await uploadBytes(storageRef, pendingAvatarFile);
+        newPhotoUrl = await getDownloadURL(uploadResult.ref);
+        profileUpdates.photoURL = newPhotoUrl;
+        hasProfileChanges = true;
       }
-      
-      if (Object.keys(updateData).length > 0) {
-        await supabase.auth.updateUser({
-          data: updateData
-        });
+
+      if (hasProfileChanges) {
+        await updateProfile(user, profileUpdates);
         
-        if (updateData.full_name) {
-          setOriginalName(updateData.full_name);
+        if (profileUpdates.displayName) {
+          setOriginalName(profileUpdates.displayName);
           if (onUpdateName) {
-            onUpdateName(updateData.full_name);
+            onUpdateName(profileUpdates.displayName);
           }
         }
-        if (updateData.avatar_url) {
+        if (profileUpdates.photoURL) {
+          setAvatarUrl(profileUpdates.photoURL);
           if (onUpdateAvatar) {
-            onUpdateAvatar(updateData.avatar_url);
+            onUpdateAvatar(profileUpdates.photoURL);
           }
         }
-        
         setPendingAvatarFile(null);
       }
 
