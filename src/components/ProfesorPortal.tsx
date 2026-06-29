@@ -3,6 +3,7 @@ import { Aspirante, Documento } from '../types';
 import { useUI } from '../contexts/UIContext';
 import ConfiguracionPerfilFederativo from './ConfiguracionPerfilFederativo';
 import UserAvatarBadge from './UserAvatarBadge';
+import { useFirebaseProfile } from '../hooks/useFirebaseProfile';
 
 interface ProfesorPortalProps {
   clubName: string;
@@ -14,6 +15,7 @@ interface ProfesorPortalProps {
 
 export default function ProfesorPortal({ clubName, aspirantes, onUpdateAspirantes, onUpdateAspiranteAtomic, onLogout }: ProfesorPortalProps) {
   const { showToast, showConfirm, showAlert } = useUI();
+  const { photoURL: firebasePhoto, displayName: firebaseDisplayName } = useFirebaseProfile();
   const [activeTab, setActiveTab] = useState<'dashboard' | 'alumnos' | 'pagos' | 'estadisticas' | 'perfil'>('dashboard');
 
   const toggleDarkMode = () => {
@@ -165,15 +167,28 @@ export default function ProfesorPortal({ clubName, aspirantes, onUpdateAspirante
         <div className="absolute top-0 right-0 w-56 h-56 bg-gradient-to-br from-red-50 to-red-100/50 rounded-full blur-3xl -translate-y-24 translate-x-12 mix-blend-multiply pointer-events-none" />
 
         {/* Brand / Logo Area */}
-        <div className="px-8 mb-10 relative z-10 flex items-center justify-between">
+        <div className="px-8 mb-6 relative z-10 flex items-center justify-between">
           <div className="flex items-center gap-4">
              <UserAvatarBadge name={clubName} roleLabel="Profesor" badgeColor="bg-red-700" size="md" />
-          </div>
-            </div>
           </div>
           <button onClick={toggleDarkMode} className="w-10 h-10 rounded-full bg-stone-100 dark:bg-white/10 flex items-center justify-center text-stone-500 dark:text-stone-300 hover:text-stone-800 dark:hover:text-white transition-colors" title="Cambiar Tema">
             <span className="material-symbols-outlined text-[18px]">dark_mode</span>
           </button>
+        </div>
+
+        {/* User Profile Photo — igual que Admin */}
+        <div className="px-8 mb-8 relative z-10 flex flex-col items-center">
+          <div className="w-20 h-20 rounded-full overflow-hidden mb-3 border-2 border-white shadow-md dark:shadow-none flex items-center justify-center bg-stone-50 dark:bg-white/5">
+            {firebasePhoto ? (
+              <img src={firebasePhoto} alt={firebaseDisplayName || clubName} className="w-full h-full object-cover" />
+            ) : (
+              <span className="material-symbols-outlined text-4xl text-stone-300">account_circle</span>
+            )}
+          </div>
+          <p className="font-black text-sm text-stone-800 dark:text-stone-100 text-center leading-tight">{firebaseDisplayName || clubName}</p>
+          <span className="mt-1.5 text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 border border-red-100 dark:border-red-900/30">
+            Profesor
+          </span>
         </div>
 
         {/* Navigation Links */}

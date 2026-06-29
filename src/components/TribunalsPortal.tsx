@@ -5,6 +5,7 @@ import { generateUUID } from '../lib/uuid';
 import ActaImprimible from './ActaImprimible';
 import ConfiguracionPerfilFederativo from './ConfiguracionPerfilFederativo';
 import UserAvatarBadge from './UserAvatarBadge';
+import { useFirebaseProfile } from '../hooks/useFirebaseProfile';
 import { useUI } from '../contexts/UIContext';
 import DocViewer from './DocViewer';
 
@@ -71,6 +72,7 @@ export default function TribunalsPortal({
   convocatorias,
 }: TribunalsPortalProps) {
   const { showPrompt, showToast, showConfirm, showAlert } = useUI();
+  const { photoURL: firebasePhoto, displayName: firebaseDisplayName } = useFirebaseProfile();
   const [activeTab, setActiveTab]     = useState<TribunalTab>('dashboard');
   const [assigningAspTribunal, setAssigningAspTribunal] = useState<Tribunal | null>(null);
   const [selectedEvalAsp, setSelectedEvalAsp] = useState<Aspirante | null>(null);
@@ -326,7 +328,22 @@ export default function TribunalsPortal({
           </button>
         </div>
 
-        {/* Navigation Links */}
+        {/* User Profile Photo — igual que Admin */}
+        <div className="px-8 mb-8 relative z-10 flex flex-col items-center">
+          <div className="w-20 h-20 rounded-full overflow-hidden mb-3 border-2 border-white shadow-md dark:shadow-none flex items-center justify-center bg-stone-50 dark:bg-white/5">
+            {firebasePhoto ? (
+              <img src={firebasePhoto} alt={judges.find(j => j.id === activeJudgeId)?.name || firebaseDisplayName || 'Director'} className="w-full h-full object-cover" />
+            ) : (
+              <span className="material-symbols-outlined text-4xl text-stone-300">account_circle</span>
+            )}
+          </div>
+          <p className="font-black text-sm text-stone-800 dark:text-stone-100 text-center leading-tight">
+            {judges.find(j => j.id === activeJudgeId)?.name || firebaseDisplayName || 'Director'}
+          </p>
+          <span className="mt-1.5 text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 border border-red-100 dark:border-red-900/30">
+            Portal de Tribunales
+          </span>
+        </div>
         <div className="flex-1 overflow-y-auto px-6 no-scrollbar space-y-2 relative z-10">
           <p className="text-xs font-bold text-stone-400 uppercase tracking-widest px-2 mb-4">Navegación</p>
           {navTabs.map(tab => (

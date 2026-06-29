@@ -4,6 +4,7 @@ import { GRADOS_CONFIG } from '../data';
 import { useUI } from '../contexts/UIContext';
 import ConfiguracionPerfilFederativo from './ConfiguracionPerfilFederativo';
 import UserAvatarBadge from './UserAvatarBadge';
+import { useFirebaseProfile } from '../hooks/useFirebaseProfile';
 
 interface JudgePortalProps {
   activeJudgeId: string;
@@ -53,6 +54,7 @@ export default function JudgePortal({
   onLogout,
 }: JudgePortalProps) {
   const { showConfirm, showAlert } = useUI();
+  const { photoURL: firebasePhoto, displayName: firebaseDisplayName } = useFirebaseProfile();
   const [selectedAspId, setSelectedAspId] = useState<string | null>(null);
 
   // Identify the active judge and their assigned tribunal
@@ -243,7 +245,20 @@ export default function JudgePortal({
           </button>
         </div>
 
-        {/* Info Mesa */}
+        {/* User Profile Photo — igual que Admin */}
+        <div className="px-8 mb-6 relative z-10 flex flex-col items-center">
+          <div className="w-20 h-20 rounded-full overflow-hidden mb-3 border-2 border-white shadow-md dark:shadow-none flex items-center justify-center bg-stone-50 dark:bg-white/5">
+            {firebasePhoto ? (
+              <img src={firebasePhoto} alt={activeJudge.name} className="w-full h-full object-cover" />
+            ) : (
+              <span className="material-symbols-outlined text-4xl text-stone-300">account_circle</span>
+            )}
+          </div>
+          <p className="font-black text-sm text-stone-800 dark:text-stone-100 text-center leading-tight">{activeJudge.name || firebaseDisplayName}</p>
+          <span className="mt-1.5 text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 border border-red-100 dark:border-red-900/30">
+            Juez Evaluador
+          </span>
+        </div>
         <div className="p-6 bg-red-700 text-white relative overflow-hidden">
           <div className="absolute top-0 right-0 w-40 h-40 bg-red-500 rounded-full blur-2xl opacity-50 -translate-y-10 translate-x-10 pointer-events-none"></div>
           <p className="text-xs font-bold uppercase tracking-widest text-red-200 mb-2">Mesa Evaluadora Asignada</p>

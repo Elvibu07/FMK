@@ -3,6 +3,7 @@ import { Aspirante, Tribunal, Evaluacion, ViaExamen } from '../types';
 import { useUI } from '../contexts/UIContext';
 import ConfiguracionPerfilFederativo from './ConfiguracionPerfilFederativo';
 import UserAvatarBadge from './UserAvatarBadge';
+import { useFirebaseProfile } from '../hooks/useFirebaseProfile';
 
 interface ArbitroPortalProps {
   activeArbitroId: string;
@@ -41,6 +42,7 @@ export default function ArbitroPortal({
   onLogout,
 }: ArbitroPortalProps) {
   const { showToast, showConfirm, showAlert } = useUI();
+  const { photoURL: firebasePhoto, displayName: firebaseDisplayName } = useFirebaseProfile();
   const [selectedAspId, setSelectedAspId] = useState<string | null>(null);
   
   // Scoreboard states
@@ -182,7 +184,20 @@ export default function ArbitroPortal({
           </button>
         </div>
 
-        {/* Info Tatami */}
+        {/* User Profile Photo — igual que Admin */}
+        <div className="px-8 mb-6 relative z-10 flex flex-col items-center">
+          <div className="w-20 h-20 rounded-full overflow-hidden mb-3 border-2 border-white shadow-md dark:shadow-none flex items-center justify-center bg-stone-50 dark:bg-white/5">
+            {firebasePhoto ? (
+              <img src={firebasePhoto} alt={firebaseDisplayName || 'Árbitro'} className="w-full h-full object-cover" />
+            ) : (
+              <span className="material-symbols-outlined text-4xl text-stone-300">account_circle</span>
+            )}
+          </div>
+          <p className="font-black text-sm text-stone-800 dark:text-stone-100 text-center leading-tight">{firebaseDisplayName || 'Árbitro'}</p>
+          <span className="mt-1.5 text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/30">
+            Árbitro Kumite
+          </span>
+        </div>
         <div className="p-6 bg-indigo-700 text-white relative overflow-hidden">
           <div className="absolute top-0 right-0 w-40 h-40 bg-indigo-500 rounded-full blur-2xl opacity-50 -translate-y-10 translate-x-10 pointer-events-none"></div>
           <p className="text-xs font-bold uppercase tracking-widest text-indigo-200 mb-2">Área de Combate</p>
