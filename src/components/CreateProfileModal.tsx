@@ -7,12 +7,13 @@ import { updateProfile } from 'firebase/auth';
 interface CreateProfileModalProps {
   email: string;
   role: string;
+  defaultName?: string;
   onClose: () => void;
   onSuccess?: (displayName: string) => void;
 }
 
-export default function CreateProfileModal({ email, role, onClose, onSuccess }: CreateProfileModalProps) {
-  const [displayName, setDisplayName] = useState('');
+export default function CreateProfileModal({ email, role, defaultName = '', onClose, onSuccess }: CreateProfileModalProps) {
+  const [displayName, setDisplayName] = useState(defaultName);
   const [phone, setPhone] = useState('');
   const [birthDate, setBirthDate] = useState('');
   const [password, setPassword] = useState('');

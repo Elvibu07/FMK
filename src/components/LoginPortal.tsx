@@ -28,6 +28,7 @@ export default function LoginPortal({ onLogin, onBack }: LoginPortalProps) {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [profileRole, setProfileRole] = useState<string>('');
   const [profileEmail, setProfileEmail] = useState<string>('');
+  const [profileName, setProfileName] = useState<string>('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,8 +71,8 @@ export default function LoginPortal({ onLogin, onBack }: LoginPortalProps) {
       }
       
       if (session) {
-        let { role, profileId } = await getUserRoleAndProfile(email.trim().toLowerCase());
-        const metaName = fullName.trim() || session.displayName || '';
+        let { role, profileId, name: preRegisteredName } = await getUserRoleAndProfile(email.trim().toLowerCase());
+        const metaName = fullName.trim() || preRegisteredName || session.displayName || '';
         
         const userUid = session.uid || email.trim().toLowerCase();
         const { getUserProfile } = await import('../lib/firestore');
@@ -80,6 +81,7 @@ export default function LoginPortal({ onLogin, onBack }: LoginPortalProps) {
         if (!existingProfile) {
           setProfileRole(role || 'deportista');
           setProfileEmail(email.trim().toLowerCase());
+          setProfileName(metaName);
           setShowProfileModal(true);
         } else {
           onLogin(role || 'deportista', profileId || email.trim().toLowerCase(), metaName);
@@ -318,6 +320,7 @@ export default function LoginPortal({ onLogin, onBack }: LoginPortalProps) {
         <CreateProfileModal
           email={profileEmail}
           role={profileRole}
+          defaultName={profileName}
           onClose={() => setShowProfileModal(false)}
           onSuccess={(name) => {
             setShowProfileModal(false);

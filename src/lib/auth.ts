@@ -44,14 +44,7 @@ export async function signInWithPassword(email: string, password: string) {
   // 2. Fallback: Intentar iniciar sesión en Firebase
   try {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
-    // Obtener rol y asegurar que el perfil exista
-    const { role } = await getUserRoleAndProfile(email);
-    if (role) {
-      const { ensureProfileExists } = await import("./firestore");
-      await ensureProfileExists(role as any, user.uid, email);
-    }
-    return user;
+    return userCredential.user;
   } catch (error: any) {
     console.error('Error al iniciar sesión en Firebase:', error.message);
     throw error;
@@ -95,19 +88,20 @@ export async function signOut() {
   }
 }
 
-export async function getUserRoleAndProfile(email: string): Promise<{ role: UserRoleType; profileId?: string }> {
+export async function getUserRoleAndProfile(email: string): Promise<{ role: UserRoleType; profileId?: string; name?: string }> {
   const emailLower = email.toLowerCase().trim();
 
   try {
-    // 1. Intentar consultar la coleccion user_roles en Firebase (Staff)
+    // 1. Intentar consultar la coleccion user_roles en Firebase (Staff/Deportistas registrados)
     const qRole = query(collection(db, "user_roles"), where("email", "==", emailLower));
     const roleSnapshot = await getDocs(qRole);
 
     if (!roleSnapshot.empty) {
       const roleData = roleSnapshot.docs[0].data();
-      console.log(`[auth] Rol encontrado en Firebase (user_roles) para ${emailLower}:`, roleData.rol);
+      console.log(`[auth] Rol y nombre encontrado en Firebase (user_roles) para ${emailLower}:`, roleData.rol, roleData.name);
       return {
-        role: roleData.rol as UserRoleType
+        role: roleData.rol as UserRoleType,
+        name: roleData.name
       };
     }
 
@@ -117,10 +111,12 @@ export async function getUserRoleAndProfile(email: string): Promise<{ role: User
 
     if (!aspSnapshot.empty) {
       const aspData = aspSnapshot.docs[0];
+      const data = aspData.data();
       console.log(`[auth] Estudiante encontrado en tabla aspirantes para ${emailLower}`);
       return {
         role: 'deportista',
-        profileId: aspData.id
+        profileId: aspData.id,
+        name: data.name
       };
     }
   } catch (e) {
