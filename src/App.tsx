@@ -246,6 +246,10 @@ export default function App() {
 
       if (foundAsp) {
         setActiveUserId(foundAsp.id);
+        if ((foundAsp.name === 'Usuario' || !foundAsp.name) && fullName && fullName !== 'Usuario') {
+          foundAsp.name = fullName;
+          api.updateAspirante(foundAsp.id, { name: fullName });
+        }
       } else {
         // Primera vez que inicia sesión — crear perfil automáticamente
         const newId = generateUUID();
@@ -282,6 +286,10 @@ export default function App() {
       const foundJudge = currentJudges.find(j => j.email?.toLowerCase() === identifier || j.id.toLowerCase() === identifier || j.name.toLowerCase() === identifier);
       if (foundJudge) {
         setActiveUserId(foundJudge.id);
+        if ((foundJudge.name === 'Usuario' || foundJudge.name.startsWith('Usuario') || !foundJudge.name) && fullName && fullName !== 'Usuario') {
+          foundJudge.name = fullName;
+          api.updateJudge(foundJudge.id, { name: fullName });
+        }
       } else {
         const newId = generateUUID();
         const newJudge: Judge = {
