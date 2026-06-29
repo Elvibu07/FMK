@@ -154,8 +154,23 @@ export async function fetchJudges() {
   try {
     const querySnapshot = await getDocs(collection(db, "user_roles"));
     const judges: any[] = [];
+    const seenEmails = new Set<string>();
+
     querySnapshot.forEach((docSnap) => {
       const data = docSnap.data();
+      const emailLower = data.email?.toLowerCase().trim();
+      
+      if (emailLower) {
+        if (seenEmails.has(emailLower)) {
+          // If the duplicate has a generated ID (contains '-'), delete it in the background to clean up DB
+          if (docSnap.id.includes('-')) {
+            deleteDoc(doc(db, "user_roles", docSnap.id)).catch(() => {});
+          }
+          return;
+        }
+        seenEmails.add(emailLower);
+      }
+
       if (['juez', 'arbitro', 'medico', 'director'].includes(data.rol)) {
         judges.push({
           id: docSnap.id,
@@ -181,7 +196,8 @@ export async function createJudge(judge: any): Promise<boolean> {
     if (judge.rank === 'Médico') rol = 'medico';
     if (judge.rank?.includes('Árbitro')) rol = 'arbitro';
 
-    await setDoc(doc(db, "user_roles", judge.id || judge.email || Date.now().toString()), {
+    const emailLower = judge.email.toLowerCase().trim();
+    await setDoc(doc(db, "user_roles", emailLower), {
       email: judge.email,
       nombre: judge.name,
       name: judge.name,
