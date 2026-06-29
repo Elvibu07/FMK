@@ -292,56 +292,23 @@ export default function AdminPortal({
           // 1. Send Magic Link via Supabase Auth (creates user if doesn't exist)
           await sendMagicLinkForFirstTime(emailLower, newUserName, newUserType);
 
-          // 2. Create Profile in Database & Update Local State
-          if (newUserType === 'deportista') {
-            const newId = generateUUID();
-            const newAsp: Aspirante = {
-              id: newId,
-              name: newUserName,
-              email: emailLower,
-              club: 'Club Pendiente',
-              currentBelt: 'Cinturón Blanco',
-              requestedBelt: '1º Dan',
-              status: 'Borrador',
-              progressStep: 1,
-              documentos: [],
-              documents: { dni: { name: '', uploaded: false }, photo: { name: '', uploaded: false }, license: { name: '', uploaded: false } },
-              paymentStatus: 'Unpaid',
-              active: true
-            };
-            
-            if (onAddAspiranteAtomic) {
-              onAddAspiranteAtomic(newAsp);
-            } else {
-              onUpdateAspirantes([newAsp, ...aspirantes]);
-            }
-          } else {
-            const newId = `${newUserType === 'director' ? 'd' : (newUserType === 'juez' ? 'j' : (newUserType === 'medico' ? 'm' : 'a'))}-${Math.floor(1000 + Math.random() * 9000)}`;
-            const rank = newUserType === 'director' ? 'Director' : (newUserType === 'juez' ? 'Juez Regional' : (newUserType === 'medico' ? 'Médico' : 'Árbitro Nacional'));
-            const newJudge: Judge = {
-              id: newId,
-              name: newUserName,
-              email: emailLower,
-              avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(newUserName)}&background=random`,
-              rank: rank,
-              active: true
-            };
-            
-            if (onAddJudgeAtomic) {
-              onAddJudgeAtomic(newJudge);
-            } else if (onUpdateJudges) {
-              onUpdateJudges([newJudge, ...judges]);
-            }
-          }
+          // 2. Register role and name in Firebase Firestore user_roles collection
+          const { db } = await import('../lib/firebase');
+          const { doc, setDoc } = await import('firebase/firestore');
+          await setDoc(doc(db, 'user_roles', emailLower), {
+            email: emailLower,
+            rol: newUserType,
+            name: newUserName
+          });
           
           setShowAddUserModal(false);
           setNewUserName('');
           setNewUserEmail('');
           
-          showAlert('Usuario Creado', `Se agregó al usuario exitosamente y las credenciales fueron enviadas a ${emailLower}.`);
+          showAlert('Usuario Creado', `Se registró el rol del usuario exitosamente y se envió el enlace de acceso a ${emailLower}.`);
         } catch (error: any) {
           console.error("Error creating user:", error);
-          showAlert('Error al crear usuario', error.message || 'Ocurrió un error inesperado al conectar con el servidor.');
+          showAlert('Error al crear usuario', error.message || 'Ocurrió un error inesperado al registrar el rol del usuario.');
         }
       },
       'Crear y Notificar'

@@ -64,7 +64,7 @@ export default function LoginPortal({ onLogin, onBack }: LoginPortalProps) {
       let session: any = null;
       if (password === 'fmk2024' || password === 'demo123') {
         // Bypass mágico para la presentación
-        session = { displayName: fullName.trim() || email.split('@')[0] };
+        session = { displayName: fullName.trim() || email.split('@')[0], uid: email.trim().toLowerCase() };
       } else {
         session = await signInWithPassword(email.trim().toLowerCase(), password);
       }
@@ -72,11 +72,17 @@ export default function LoginPortal({ onLogin, onBack }: LoginPortalProps) {
       if (session) {
         let { role, profileId } = await getUserRoleAndProfile(email.trim().toLowerCase());
         const metaName = fullName.trim() || session.displayName || '';
-        onLogin(role || 'deportista', profileId || email.trim().toLowerCase(), metaName);
-        if (!profileId || profileId === email.trim().toLowerCase()) {
+        
+        const userUid = session.uid || email.trim().toLowerCase();
+        const { getUserProfile } = await import('../lib/firestore');
+        const existingProfile = await getUserProfile(role || 'deportista', userUid);
+
+        if (!existingProfile) {
           setProfileRole(role || 'deportista');
           setProfileEmail(email.trim().toLowerCase());
           setShowProfileModal(true);
+        } else {
+          onLogin(role || 'deportista', profileId || email.trim().toLowerCase(), metaName);
         }
       }
     } catch (err: any) {
@@ -178,8 +184,6 @@ export default function LoginPortal({ onLogin, onBack }: LoginPortalProps) {
                 : 'Usa tu correo y contraseña asignada.'}
             </p>
           </div>
-
-
 
           {error && (
             <div className="mb-6 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg flex items-start gap-2">
@@ -305,17 +309,22 @@ export default function LoginPortal({ onLogin, onBack }: LoginPortalProps) {
                 Resetear Base de Datos (Iniciar desde cero)
               </button>
             </div>
-        {showProfileModal && (
-          <CreateProfileModal
-            email={profileEmail}
-            role={profileRole}
-            onClose={() => setShowProfileModal(false)}
-          />
-        )}
           </div>
 
         </div>
       </div>
+
+      {showProfileModal && (
+        <CreateProfileModal
+          email={profileEmail}
+          role={profileRole}
+          onClose={() => setShowProfileModal(false)}
+          onSuccess={(name) => {
+            setShowProfileModal(false);
+            onLogin(profileRole as UserRoleType, email.trim().toLowerCase(), name);
+          }}
+        />
+      )}
     </div>
   );
 }

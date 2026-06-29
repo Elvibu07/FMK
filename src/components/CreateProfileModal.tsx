@@ -2,14 +2,16 @@ import React, { useState } from 'react';
 import { updatePassword } from '../lib/auth';
 import { ensureProfileExists } from '../lib/firestore';
 import { auth } from '../lib/firebase';
+import { updateProfile } from 'firebase/auth';
 
 interface CreateProfileModalProps {
   email: string;
   role: string;
   onClose: () => void;
+  onSuccess?: (displayName: string) => void;
 }
 
-export default function CreateProfileModal({ email, role, onClose }: CreateProfileModalProps) {
+export default function CreateProfileModal({ email, role, onClose, onSuccess }: CreateProfileModalProps) {
   const [displayName, setDisplayName] = useState('');
   const [phone, setPhone] = useState('');
   const [birthDate, setBirthDate] = useState('');
@@ -20,12 +22,29 @@ export default function CreateProfileModal({ email, role, onClose }: CreateProfi
     e.preventDefault();
     setIsSaving(true);
     try {
-      const uid = auth.currentUser?.uid;
-      if (!uid) throw new Error('User not authenticated');
+      const user = auth.currentUser;
+      if (!user) throw new Error('User not authenticated');
+      
       if (password) {
         await updatePassword(password);
       }
-      await ensureProfileExists(role, uid, email);
+
+      if (displayName) {
+        await updateProfile(user, { displayName });
+      }
+
+      await ensureProfileExists(role, user.uid, email, {
+        displayName,
+        name: displayName,
+        telefono: phone,
+        phone: phone,
+        fechaNacimiento: birthDate,
+        birthDate: birthDate
+      });
+
+      if (onSuccess) {
+        onSuccess(displayName);
+      }
     } catch (err) {
       console.error('Error creating profile:', err);
     } finally {
