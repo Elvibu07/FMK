@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Aspirante, Convocatoria, Documento } from '../types';
+import { Aspirante, Convocatoria, Documento, Judge } from '../types';
 import { useUI } from '../contexts/UIContext';
 import ConfiguracionPerfilFederativo from './ConfiguracionPerfilFederativo';
 import UserAvatarBadge from './UserAvatarBadge';
@@ -7,6 +7,8 @@ import { auth } from '../lib/firebase';
 import DocViewer from './DocViewer';
 
 interface MedicoPortalProps {
+  activeMedicoId?: string;
+  judges: Judge[];
   aspirantes: Aspirante[];
   convocatorias: Convocatoria[];
   onUpdateAspirante: (id: string, updates: Partial<Aspirante>) => void;
@@ -39,31 +41,18 @@ function BadgeMedico({ estado }: { estado?: 'pendiente' | 'apto' | 'no_apto' }) 
   );
 }
 
-export default function MedicoPortal({ aspirantes, convocatorias, onUpdateAspirante, onLogout }: MedicoPortalProps) {
+export default function MedicoPortal({ activeMedicoId, judges, aspirantes, convocatorias, onUpdateAspirante, onLogout }: MedicoPortalProps) {
   const { showToast } = useUI();
   const [activeTab, setActiveTab] = useState<MedicoTab>('evaluacion');
-  const [medicoName, setMedicoName] = useState<string>('Bob Toronja');
+  
+  const activeMedico = judges.find(j => j.id === activeMedicoId);
+  const [medicoName, setMedicoName] = useState<string>(activeMedico?.name || 'Médico');
 
   useEffect(() => {
-    const user = auth.currentUser;
-    if (user) {
-      if (user.displayName) {
-        setMedicoName(user.displayName);
-      } else if (user.email === 'paginasusar@gmail.com') {
-        setMedicoName('Bob Toronja');
-      }
+    if (activeMedico) {
+      setMedicoName(activeMedico.name);
     }
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      if (user) {
-        if (user.displayName) {
-          setMedicoName(user.displayName);
-        } else if (user.email === 'paginasusar@gmail.com') {
-          setMedicoName('Bob Toronja');
-        }
-      }
-    });
-    return () => unsubscribe();
-  }, []);
+  }, [activeMedico]);
 
   const [search, setSearch] = useState('');
   const [filterConv, setFilterConv] = useState<string>('all');

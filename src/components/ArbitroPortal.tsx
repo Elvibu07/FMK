@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Aspirante, Tribunal, Evaluacion, ViaExamen } from '../types';
+import { Aspirante, Tribunal, Evaluacion, ViaExamen, Judge } from '../types';
 import { useUI } from '../contexts/UIContext';
 import ConfiguracionPerfilFederativo from './ConfiguracionPerfilFederativo';
 import UserAvatarBadge from './UserAvatarBadge';
@@ -7,6 +7,7 @@ import { useFirebaseProfile } from '../hooks/useFirebaseProfile';
 
 interface ArbitroPortalProps {
   activeArbitroId: string;
+  judges: Judge[];
   tribunals: Tribunal[];
   aspirantes: Aspirante[];
   onUpdateAspirantes: (updated: Aspirante[]) => void;
@@ -35,6 +36,7 @@ function buildEvaluacion(aspId: string): Evaluacion {
 
 export default function ArbitroPortal({
   activeArbitroId,
+  judges,
   tribunals,
   aspirantes,
   onUpdateAspirantes,
@@ -43,6 +45,7 @@ export default function ArbitroPortal({
 }: ArbitroPortalProps) {
   const { showToast, showConfirm, showAlert } = useUI();
   const { photoURL: firebasePhoto, displayName: firebaseDisplayName } = useFirebaseProfile();
+  const activeArbitro = judges.find(j => j.id === activeArbitroId);
   const [selectedAspId, setSelectedAspId] = useState<string | null>(null);
   
   // Scoreboard states
@@ -156,7 +159,7 @@ export default function ArbitroPortal({
       {/* Mobile Header */}
       <div className="xl:hidden sticky top-0 z-40 bg-white/80 dark:bg-[#151515]/80 backdrop-blur-md border-b border-stone-200 dark:border-white/20 p-4 flex justify-between items-center shadow-sm">
         <div className="flex items-center gap-2">
-           <UserAvatarBadge roleLabel="Árbitro Kumite" badgeColor="bg-indigo-700" size="sm" />
+           <UserAvatarBadge name={activeArbitro?.name || firebaseDisplayName || 'Árbitro'} roleLabel="Árbitro Kumite" badgeColor="bg-indigo-700" size="sm" />
         </div>
         <div className="flex items-center gap-2">
           <button onClick={toggleDarkMode} className="text-stone-500 dark:text-stone-400 flex items-center justify-center w-8 h-8 hover:bg-stone-100 dark:hover:bg-white/10 rounded-md transition-all">
@@ -177,7 +180,7 @@ export default function ArbitroPortal({
         {/* Brand / Logo Area */}
         <div className="px-8 mb-10 relative z-10 flex items-center justify-between">
           <div className="flex items-center gap-4">
-             <UserAvatarBadge roleLabel="Árbitro Kumite" badgeColor="bg-indigo-700" size="md" />
+             <UserAvatarBadge name={activeArbitro?.name || firebaseDisplayName || 'Árbitro'} roleLabel="Árbitro Kumite" badgeColor="bg-indigo-700" size="md" />
           </div>
           <button onClick={toggleDarkMode} className="w-10 h-10 rounded-full bg-stone-100 dark:bg-white/10 flex items-center justify-center text-stone-500 dark:text-stone-300 hover:text-stone-800 dark:hover:text-white transition-colors" title="Cambiar Tema">
             <span className="material-symbols-outlined text-[18px]">dark_mode</span>
@@ -188,12 +191,12 @@ export default function ArbitroPortal({
         <div className="px-8 mb-6 relative z-10 flex flex-col items-center">
           <div className="w-20 h-20 rounded-full overflow-hidden mb-3 border-2 border-white shadow-md dark:shadow-none flex items-center justify-center bg-stone-50 dark:bg-white/5">
             {firebasePhoto ? (
-              <img src={firebasePhoto} alt={firebaseDisplayName || 'Árbitro'} className="w-full h-full object-cover" />
+              <img src={firebasePhoto} alt={activeArbitro?.name || firebaseDisplayName || 'Árbitro'} className="w-full h-full object-cover" />
             ) : (
               <span className="material-symbols-outlined text-4xl text-stone-300">account_circle</span>
             )}
           </div>
-          <p className="font-black text-sm text-stone-800 dark:text-stone-100 text-center leading-tight">{firebaseDisplayName || 'Árbitro'}</p>
+          <p className="font-black text-sm text-stone-800 dark:text-stone-100 text-center leading-tight">{activeArbitro?.name || firebaseDisplayName || 'Árbitro'}</p>
           <span className="mt-1.5 text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/30">
             Árbitro Kumite
           </span>

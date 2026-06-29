@@ -590,6 +590,7 @@ export default function App() {
         {role === 'arbitro' && activeUserId && (
           <ArbitroPortal
             activeArbitroId={activeUserId}
+            judges={judges}
             tribunals={tribunals}
             aspirantes={aspirantes}
             onUpdateAspirantes={setAspirantes}
@@ -610,6 +611,8 @@ export default function App() {
 
         {role === 'medico' && (
           <MedicoPortal
+            activeMedicoId={activeUserId || undefined}
+            judges={judges}
             aspirantes={aspirantes}
             convocatorias={convocatorias}
             onUpdateAspirante={updateAspiranteAtomic}
