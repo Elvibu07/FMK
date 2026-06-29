@@ -121,10 +121,10 @@ export default function App() {
             }
             
             const { getUserRoleAndProfile } = await import('./lib/auth');
-            let { role, profileId } = await getUserRoleAndProfile(user.email);
+            let { role, profileId, name: registeredName } = await getUserRoleAndProfile(user.email);
             
             if (role) {
-              handleLogin(role, profileId || user.email, user.displayName || 'Usuario', aspData, judgeData);
+              handleLogin(role, profileId || user.email, registeredName || user.displayName || 'Usuario', aspData, judgeData);
             }
           }
         } catch (authErr) {

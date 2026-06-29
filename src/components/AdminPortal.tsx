@@ -300,12 +300,69 @@ export default function AdminPortal({
             rol: newUserType,
             name: newUserName
           });
+
+          // 3. Create the profile document in Firestore
+          const roleToCollectionMap: Record<string, string> = {
+            deportista: "aspirantes_demo",
+            aspirante: "aspirantes_demo",
+            juez: "judges",
+            arbitro: "arbitros",
+            medico: "medicos",
+            director: "directores",
+            admin: "admins",
+          };
+          const collectionName = roleToCollectionMap[newUserType] || "aspirantes_demo";
+
+          if (newUserType === 'deportista' || newUserType === 'aspirante') {
+            const newId = generateUUID();
+            const newAsp: Aspirante = {
+              id: newId,
+              name: newUserName,
+              email: emailLower,
+              club: 'Club Pendiente',
+              currentBelt: 'Cinturón Blanco',
+              requestedBelt: '1º Dan',
+              status: 'Borrador',
+              progressStep: 1,
+              documentos: [],
+              documents: { dni: { name: '', uploaded: false }, photo: { name: '', uploaded: false }, license: { name: '', uploaded: false } },
+              paymentStatus: 'Unpaid',
+              active: true
+            };
+            
+            await setDoc(doc(db, collectionName, newId), newAsp);
+
+            if (onAddAspiranteAtomic) {
+              onAddAspiranteAtomic(newAsp);
+            } else {
+              onUpdateAspirantes([newAsp, ...aspirantes]);
+            }
+          } else {
+            const newId = `${newUserType === 'director' ? 'd' : (newUserType === 'juez' ? 'j' : (newUserType === 'medico' ? 'm' : 'a'))}-${Math.floor(1000 + Math.random() * 9000)}`;
+            const rank = newUserType === 'director' ? 'Director' : (newUserType === 'juez' ? 'Juez Regional' : (newUserType === 'medico' ? 'Médico' : 'Árbitro Nacional'));
+            const newJudge: Judge = {
+              id: newId,
+              name: newUserName,
+              email: emailLower,
+              avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(newUserName)}&background=random`,
+              rank: rank,
+              active: true
+            };
+
+            await setDoc(doc(db, collectionName, newId), newJudge);
+
+            if (onAddJudgeAtomic) {
+              onAddJudgeAtomic(newJudge);
+            } else if (onUpdateJudges) {
+              onUpdateJudges([newJudge, ...judges]);
+            }
+          }
           
           setShowAddUserModal(false);
           setNewUserName('');
           setNewUserEmail('');
           
-          showAlert('Usuario Creado', `Se registró el rol del usuario exitosamente y se envió el enlace de acceso a ${emailLower}.`);
+          showAlert('Usuario Creado', `Se registró el rol y se creó el perfil del usuario exitosamente. El enlace de acceso fue enviado a ${emailLower}.`);
         } catch (error: any) {
           console.error("Error creating user:", error);
           showAlert('Error al crear usuario', error.message || 'Ocurrió un error inesperado al registrar el rol del usuario.');
