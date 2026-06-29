@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useUI } from '../contexts/UIContext';
 import { signInWithPassword, sendMagicLinkForFirstTime, getUserRoleAndProfile, UserRoleType } from '../lib/auth';
+import CreateProfileModal from './CreateProfileModal';
 
 interface LoginPortalProps {
   onLogin: (role: UserRoleType, userEmail?: string, fullName?: string) => void;
@@ -24,6 +25,9 @@ export default function LoginPortal({ onLogin, onBack }: LoginPortalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isForgotMode, setIsForgotMode] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileRole, setProfileRole] = useState<string>('');
+  const [profileEmail, setProfileEmail] = useState<string>('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,6 +73,11 @@ export default function LoginPortal({ onLogin, onBack }: LoginPortalProps) {
         let { role, profileId } = await getUserRoleAndProfile(email.trim().toLowerCase());
         const metaName = fullName.trim() || session.displayName || '';
         onLogin(role || 'deportista', profileId || email.trim().toLowerCase(), metaName);
+        if (!profileId || profileId === email.trim().toLowerCase()) {
+          setProfileRole(role || 'deportista');
+          setProfileEmail(email.trim().toLowerCase());
+          setShowProfileModal(true);
+        }
       }
     } catch (err: any) {
       console.error(err);
@@ -296,6 +305,13 @@ export default function LoginPortal({ onLogin, onBack }: LoginPortalProps) {
                 Resetear Base de Datos (Iniciar desde cero)
               </button>
             </div>
+        {showProfileModal && (
+          <CreateProfileModal
+            email={profileEmail}
+            role={profileRole}
+            onClose={() => setShowProfileModal(false)}
+          />
+        )}
           </div>
 
         </div>

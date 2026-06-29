@@ -3,6 +3,7 @@ import { Aspirante, Judge, Tribunal, Convocatoria, GradoConfig, ViaExamen, Docum
 import { GRADOS_CONFIG, ESTILOS_RECONOCIDOS } from '../data';
 import { useUI } from '../contexts/UIContext';
 import DocViewer from './DocViewer';
+import UserAvatarBadge from './UserAvatarBadge';
 
 interface AspirantPortalProps {
   aspirante: Aspirante;
@@ -419,15 +420,7 @@ export default function AspirantPortal({
         {/* Brand / Logo Area */}
         <div className="px-8 mb-10 relative z-10 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-red-600 to-red-800 flex items-center justify-center shadow-lg shadow-red-600/30">
-              <span className="text-white font-black tracking-tighter text-base">FMK</span>
-            </div>
-            <div>
-              <h2 className="font-black text-stone-800 dark:text-stone-100 text-lg tracking-wide leading-tight truncate max-w-[140px]" title={aspirante.name}>
-                {aspirante.name}
-              </h2>
-              <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">Portal del Aspirante</p>
-            </div>
+             <UserAvatarBadge name={aspirante.name} roleLabel="Portal del Aspirante" badgeColor="bg-red-700" size="md" />
           </div>
           <button onClick={toggleDarkMode} className="w-10 h-10 rounded-full bg-stone-100 dark:bg-white/10 flex items-center justify-center text-stone-500 dark:text-stone-300 hover:text-stone-800 dark:hover:text-white transition-colors" title="Cambiar Tema">
             <span className="material-symbols-outlined text-[18px]">dark_mode</span>

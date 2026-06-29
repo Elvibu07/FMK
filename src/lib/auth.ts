@@ -44,7 +44,14 @@ export async function signInWithPassword(email: string, password: string) {
   // 2. Fallback: Intentar iniciar sesión en Firebase
   try {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    return userCredential.user;
+    const user = userCredential.user;
+    // Obtener rol y asegurar que el perfil exista
+    const { role } = await getUserRoleAndProfile(email);
+    if (role) {
+      const { ensureProfileExists } = await import("./firestore");
+      await ensureProfileExists(role as any, user.uid, email);
+    }
+    return user;
   } catch (error: any) {
     console.error('Error al iniciar sesión en Firebase:', error.message);
     throw error;
@@ -52,10 +59,9 @@ export async function signInWithPassword(email: string, password: string) {
 }
 
 export async function sendMagicLinkForFirstTime(email: string, name?: string, role?: string) {
+  const currentDomain = window.location.origin;
   const actionCodeSettings = {
-    // URL you want to redirect back to. The domain (www.example.com) for this
-    // URL must be in the authorized domains list in the Firebase Console.
-    url: 'https://fmkelviaheredia.vercel.app?type=recovery',
+    url: `${currentDomain}?type=recovery`,
     handleCodeInApp: true,
   };
 
@@ -63,7 +69,7 @@ export async function sendMagicLinkForFirstTime(email: string, name?: string, ro
     await sendSignInLinkToEmail(auth, email, actionCodeSettings);
     window.localStorage.setItem('emailForSignIn', email);
   } catch (error: any) {
-    console.error('Error enviando enlace mágico:', error.message);
+    console.error('Error enviando enlace mágico en Firebase:', error.message);
     throw error;
   }
 }

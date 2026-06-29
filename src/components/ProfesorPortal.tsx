@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Aspirante, Documento } from '../types';
 import { useUI } from '../contexts/UIContext';
 import ConfiguracionPerfilFederativo from './ConfiguracionPerfilFederativo';
+import UserAvatarBadge from './UserAvatarBadge';
 
 interface ProfesorPortalProps {
   clubName: string;
@@ -145,13 +146,7 @@ export default function ProfesorPortal({ clubName, aspirantes, onUpdateAspirante
       {/* Mobile Header */}
       <div className="xl:hidden sticky top-0 z-40 bg-white/80 dark:bg-[#151515]/80 backdrop-blur-md border-b border-stone-200 dark:border-white/20 p-4 flex justify-between items-center shadow-sm">
         <div className="flex items-center gap-2">
-           <div className="w-8 h-8 rounded-lg bg-red-700 flex items-center justify-center shadow-sm">
-              <span className="material-symbols-outlined text-white text-xs">groups</span>
-           </div>
-           <div>
-             <span className="font-bold text-stone-800 dark:text-stone-100 text-sm leading-tight block truncate max-w-[150px]">{clubName}</span>
-             <span className="text-[9px] font-bold text-red-600 uppercase tracking-widest block">Profesor</span>
-           </div>
+           <UserAvatarBadge name={clubName} roleLabel="Profesor" badgeColor="bg-red-700" size="sm" />
         </div>
         <div className="flex items-center gap-2">
           <button onClick={toggleDarkMode} className="text-stone-500 dark:text-stone-400 flex items-center justify-center w-8 h-8 hover:bg-stone-100 dark:hover:bg-white/10 rounded-md transition-all">
@@ -172,12 +167,8 @@ export default function ProfesorPortal({ clubName, aspirantes, onUpdateAspirante
         {/* Brand / Logo Area */}
         <div className="px-8 mb-10 relative z-10 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-red-600 to-red-800 flex items-center justify-center shadow-lg shadow-red-600/30">
-              <span className="material-symbols-outlined text-white text-base">groups</span>
-            </div>
-            <div className="flex flex-col">
-              <span className="font-black text-stone-800 dark:text-stone-100 text-lg tracking-wide leading-tight truncate max-w-[140px]" title={clubName}>{clubName}</span>
-              <span className="text-xs font-bold text-stone-400 uppercase tracking-widest">Profesor</span>
+             <UserAvatarBadge name={clubName} roleLabel="Profesor" badgeColor="bg-red-700" size="md" />
+          </div>
             </div>
           </div>
           <button onClick={toggleDarkMode} className="w-10 h-10 rounded-full bg-stone-100 dark:bg-white/10 flex items-center justify-center text-stone-500 dark:text-stone-300 hover:text-stone-800 dark:hover:text-white transition-colors" title="Cambiar Tema">

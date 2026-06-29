@@ -8,6 +8,7 @@ import { supabase } from '../lib/supabase';
 import { createAspirante, createJudge } from '../lib/api';
 import { generateUUID } from '../lib/uuid';
 import { sendMagicLinkForFirstTime } from '../lib/auth';
+import UserAvatarBadge from './UserAvatarBadge';
 
 interface AdminPortalProps {
   aspirantes: Aspirante[];
@@ -621,13 +622,7 @@ export default function AdminPortal({
       {/* Mobile Header */}
       <div className="xl:hidden sticky top-0 z-40 bg-white/80 dark:bg-[#151515]/80 backdrop-blur-md border-b border-stone-200 dark:border-white/20 p-4 flex justify-between items-center shadow-sm">
         <div className="flex items-center gap-2">
-           <div className="w-8 h-8 rounded-lg bg-red-700 flex items-center justify-center shadow-sm">
-              <span className="text-white font-black tracking-tighter text-xs">FMK</span>
-           </div>
-           <div>
-             <span className="font-bold text-stone-800 dark:text-stone-100 text-sm leading-tight block truncate max-w-[120px]" title={adminName}>{adminName}</span>
-             <span className="text-[10px] font-bold text-red-600 uppercase tracking-widest block">Portal de Administración</span>
-           </div>
+           <UserAvatarBadge name={adminName} roleLabel="Portal de Administración" badgeColor="bg-indigo-700" size="sm" />
         </div>
         <div className="flex items-center gap-2">
             <button onClick={handleInjectTestData} className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-amber-950 font-bold text-[10px] uppercase tracking-widest rounded-md transition-colors shadow-sm flex items-center gap-1">

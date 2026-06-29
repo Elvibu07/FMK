@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Aspirante, Convocatoria, Documento } from '../types';
 import { useUI } from '../contexts/UIContext';
 import ConfiguracionPerfilFederativo from './ConfiguracionPerfilFederativo';
+import UserAvatarBadge from './UserAvatarBadge';
 import { auth } from '../lib/firebase';
 import DocViewer from './DocViewer';
 
@@ -129,13 +130,7 @@ export default function MedicoPortal({ aspirantes, convocatorias, onUpdateAspira
       {/* ── Top Bar ── */}
       <header className="sticky top-0 z-30 bg-white/80 dark:bg-[#151515]/80 backdrop-blur-md border-b border-stone-200 dark:border-white/10 px-8 h-18 flex items-center justify-between" style={{ height: '72px' }}>
         <div className="flex items-center gap-4">
-          <div className="w-11 h-11 bg-emerald-600 rounded-2xl flex items-center justify-center shadow-lg">
-            <span className="material-symbols-outlined text-white text-2xl">medical_services</span>
-          </div>
-          <div>
-            <h1 className="font-black text-xl tracking-tight text-stone-900 dark:text-white leading-none truncate max-w-[160px]" title={medicoName}>{medicoName}</h1>
-            <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mt-0.5">Portal Médico</p>
-          </div>
+          <UserAvatarBadge name={medicoName} roleLabel="Portal Médico" badgeColor="bg-emerald-600" size="md" />
         </div>
         <div className="flex items-center gap-3">
           <button onClick={toggleDarkMode} className="w-10 h-10 rounded-full bg-stone-100 dark:bg-white/10 flex items-center justify-center text-stone-500 dark:text-stone-300 hover:text-stone-800 dark:hover:text-white transition-colors">
