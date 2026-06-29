@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useUI } from '../contexts/UIContext';
 import { signInWithPassword, sendMagicLinkForFirstTime, getUserRoleAndProfile, UserRoleType } from '../lib/auth';
-import CreateProfileModal from './CreateProfileModal';
 
 interface LoginPortalProps {
   onLogin: (role: UserRoleType, userEmail?: string, fullName?: string) => void;
@@ -73,19 +72,7 @@ export default function LoginPortal({ onLogin, onBack }: LoginPortalProps) {
       if (session) {
         let { role, profileId, name: preRegisteredName } = await getUserRoleAndProfile(email.trim().toLowerCase());
         const metaName = fullName.trim() || preRegisteredName || session.displayName || '';
-        
-        const userUid = session.uid || email.trim().toLowerCase();
-        const { getUserProfile } = await import('../lib/firestore');
-        const existingProfile = await getUserProfile(role || 'deportista', userUid);
-
-        if (!existingProfile) {
-          setProfileRole(role || 'deportista');
-          setProfileEmail(email.trim().toLowerCase());
-          setProfileName(metaName);
-          setShowProfileModal(true);
-        } else {
-          onLogin(role || 'deportista', profileId || email.trim().toLowerCase(), metaName);
-        }
+        onLogin(role || 'deportista', profileId || email.trim().toLowerCase(), metaName);
       }
     } catch (err: any) {
       console.error(err);
@@ -315,19 +302,6 @@ export default function LoginPortal({ onLogin, onBack }: LoginPortalProps) {
 
         </div>
       </div>
-
-      {showProfileModal && (
-        <CreateProfileModal
-          email={profileEmail}
-          role={profileRole}
-          defaultName={profileName}
-          onClose={() => setShowProfileModal(false)}
-          onSuccess={(name) => {
-            setShowProfileModal(false);
-            onLogin(profileRole as UserRoleType, email.trim().toLowerCase(), name);
-          }}
-        />
-      )}
     </div>
   );
 }
