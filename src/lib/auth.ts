@@ -98,10 +98,10 @@ export async function getUserRoleAndProfile(email: string): Promise<{ role: User
 
     if (!roleSnapshot.empty) {
       const roleData = roleSnapshot.docs[0].data();
-      console.log(`[auth] Rol y nombre encontrado en Firebase (user_roles) para ${emailLower}:`, roleData.rol, roleData.name);
+      console.log(`[auth] Rol y nombre encontrado en Firebase (user_roles) para ${emailLower}:`, roleData.rol, roleData.name || roleData.nombre);
       return {
         role: roleData.rol as UserRoleType,
-        name: roleData.name
+        name: roleData.name || roleData.nombre
       };
     }
 

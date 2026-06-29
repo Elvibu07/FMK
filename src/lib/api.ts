@@ -159,7 +159,7 @@ export async function fetchJudges() {
       if (['juez', 'arbitro', 'medico', 'director'].includes(data.rol)) {
         judges.push({
           id: docSnap.id,
-          name: data.nombre || data.email || 'Personal',
+          name: data.name || data.nombre || data.email || 'Personal',
           email: data.email,
           avatarUrl: '',
           rank: data.rol === 'director' ? 'Director' : data.rol === 'medico' ? 'Médico' : data.rol === 'arbitro' ? 'Árbitro Nacional' : 'Juez Regional',
@@ -184,6 +184,7 @@ export async function createJudge(judge: any): Promise<boolean> {
     await setDoc(doc(db, "user_roles", judge.id || judge.email || Date.now().toString()), {
       email: judge.email,
       nombre: judge.name,
+      name: judge.name,
       rol: rol
     });
     return true;
@@ -196,7 +197,10 @@ export async function createJudge(judge: any): Promise<boolean> {
 export async function updateJudge(id: string, updates: any): Promise<boolean> {
   try {
     const dataToUpdate: any = {};
-    if (updates.name) dataToUpdate.nombre = updates.name;
+    if (updates.name) {
+      dataToUpdate.nombre = updates.name;
+      dataToUpdate.name = updates.name;
+    }
     if (updates.email) dataToUpdate.email = updates.email;
     if (updates.rank) {
         if (updates.rank === 'Director') dataToUpdate.rol = 'director';
